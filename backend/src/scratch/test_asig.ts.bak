@@ -1,0 +1,43 @@
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+async function main() {
+  console.log('--- Test de Creación de Asignación ---')
+  
+  // 1. Verificar datos necesarios
+  const motorista = await prisma.motorista.findFirst()
+  const vehiculo = await prisma.vehiculo.findFirst({ where: { estado: 'disponible' } })
+  const semana = await prisma.semana.findFirst()
+
+  if (!motorista || !semana) {
+    console.error('Error: Faltan motoristas o semanas en la DB')
+    return
+  }
+
+  console.log('Usando Motorista ID:', motorista.id_motorista)
+  console.log('Usando Semana ID:', semana.id_semana)
+
+  try {
+    const nueva = await prisma.asignacionDiaria.create({
+      data: {
+        id_motorista: motorista.id_motorista,
+        id_vehiculo: vehiculo?.id_vehiculo || null,
+        id_semana: semana.id_semana,
+        fecha: new Date(),
+        dia_semana: 'lunes',
+        tipo_actividad: 'administrativo',
+        unidad_solicitante: 'Test Unit',
+        destino: 'Test Destino'
+      }
+    })
+    console.log('✅ Asignación creada con éxito:', nueva.id_asignacion)
+  } catch (error: any) {
+    console.error('❌ Error de Prisma al crear asignación:', error.message)
+    if (error.code) console.error('Código de Error:', error.code)
+  }
+}
+
+main()
+  .catch(e => console.error(e))
+  .finally(async () => await prisma.$disconnect())

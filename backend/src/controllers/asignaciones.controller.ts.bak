@@ -1,0 +1,93 @@
+import { Request, Response } from 'express'
+import prisma from '../prisma/client'
+
+export const getAll = async (_req: Request, res: Response) => {
+  const asignaciones = await prisma.asignacionDiaria.findMany({
+    include: {
+      motorista: true,
+      vehiculo: true,
+      area_destino: true,
+      semana: true
+    },
+    orderBy: { fecha: 'desc' }
+  })
+  res.json({ ok: true, asignaciones })
+}
+
+async function getOrCreateSemana(fechaStr: string) {
+  const dateObj = new Date(fechaStr + 'T00:00:00.000Z')
+  const day = dateObj.getUTCDay()
+  const diffToMonday = dateObj.getUTCDate() - day + (day === 0 ? -6 : 1)
+
+  const fechaInicio = new Date(dateObj)
+  fechaInicio.setUTCDate(diffToMonday)
+
+  const fechaFin = new Date(fechaInicio)
+  fechaFin.setUTCDate(fechaInicio.getUTCDate() + 6)
+
+  let semana = await prisma.semana.findFirst({
+    where: {
+      fecha_inicio: fechaInicio,
+      fecha_fin: fechaFin
+    }
+  })
+
+  if (!semana) {
+    semana = await prisma.semana.create({
+      data: {
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin
+      }
+    })
+  }
+
+  return semana.id_semana
+}
+
+export const create = async (req: Request, res: Response) => {
+  console.log('API: Intentando crear asignación con body:', req.body)
+  try {
+    const id_semana = await getOrCreateSemana(req.body.fecha)
+    const data = {
+      ...req.body,
+      id_semana,
+      fecha: new Date(req.body.fecha + 'T00:00:00.000Z')
+    }
+    const nueva = await prisma.asignacionDiaria.create({ data })
+    res.status(201).json({ ok: true, asignacion: nueva })
+  } catch (error: any) {
+    console.error('ERROR PRISMA (Asignación):', error)
+    res.status(400).json({ ok: false, error: error.message })
+  }
+}
+
+export const update = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const data = { ...req.body }
+
+    if (data.fecha) {
+      data.id_semana = await getOrCreateSemana(data.fecha)
+      data.fecha = new Date(data.fecha + 'T00:00:00.000Z')
+    }
+
+    const actualizada = await prisma.asignacionDiaria.update({
+      where: { id_asignacion: parseInt(id) },
+      data
+    })
+    res.json({ ok: true, asignacion: actualizada })
+  } catch (error: any) {
+    console.error('Error al actualizar asignación:', error)
+    res.status(400).json({ ok: false, error: error.message })
+  }
+}
+
+export const remove = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    await prisma.asignacionDiaria.delete({ where: { id_asignacion: parseInt(id) } })
+    res.json({ ok: true, message: 'Eliminado correctamente' })
+  } catch (error: any) {
+    res.status(400).json({ ok: false, error: error.message })
+  }
+}

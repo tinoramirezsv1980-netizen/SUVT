@@ -1,0 +1,258 @@
+// =============================================================
+//  RNPN — Prisma Schema para MySQL (XAMPP)
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum EstadoMotorista {
+  activo
+  inactivo
+  destaque
+  baja
+}
+
+enum EstadoVehiculo {
+  disponible
+  en_uso
+  mantenimiento
+  baja
+}
+
+enum TipoVehiculo {
+  pickup
+  sedan
+  microbus
+  motocicleta
+  otro
+}
+
+enum TipoArea {
+  interna
+  institucional
+  externa
+  medica
+  penal
+  financiera
+}
+
+enum DiaSemana {
+  lunes
+  martes
+  miercoles
+  jueves
+  viernes
+  sabado
+  domingo
+}
+
+enum TipoActividad {
+  supervision_control
+  dui_ext
+  archivo
+  administrativo
+  juridico
+  comunicaciones
+  financiero
+  talento_humano
+  informatica
+  clinica
+  ruta
+  transporte_personal
+  activo_fijo
+  auditoria
+  innovacion
+  genero
+  mantenimiento
+  mision_oficial
+  otro
+}
+
+enum TipoNovedad {
+  incapacidad
+  permiso_personal
+  permiso_sin_goce
+  compensatorio
+  asueto
+  mision_oficial
+  destaque
+  vacaciones
+  llegada_tarde
+  ausencia_injustificada
+  renuncia
+  otro
+}
+
+enum Turno {
+  diurno
+  nocturno
+  completo
+}
+
+enum RolUsuario {
+  admin
+  supervisor
+  consulta
+}
+
+model Motorista {
+  id_motorista       Int              @id @default(autoincrement())
+  nombre             String           @db.VarChar(80)
+  apellido           String           @db.VarChar(80)
+  codigo_empleado    String           @unique @db.VarChar(20)
+  numero_licencia    String?          @db.VarChar(20)
+  categoria_licencia String?          @db.VarChar(10)
+  dui                String?          @db.VarChar(15)
+  telefono           String?          @db.VarChar(15)
+  correo             String?          @db.VarChar(120)
+  estado             EstadoMotorista  @default(activo)
+  fecha_ingreso      DateTime?        @db.Date
+  observaciones      String?          @db.Text
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+
+  conductores_habituales ConductorHabitual[]
+  asignaciones           AsignacionDiaria[]
+  novedades              Novedad[]
+  usuario                Usuario?
+
+  @@map("motorista")
+}
+
+model Vehiculo {
+  id_vehiculo           Int            @id @default(autoincrement())
+  placa                 String         @unique @db.VarChar(20)
+  marca                 String         @db.VarChar(60)
+  modelo                String         @db.VarChar(60)
+  anio                  Int?           @db.SmallInt
+  tipo                  TipoVehiculo   @default(pickup)
+  color                 String?        @db.VarChar(40)
+  numero_motor          String?        @db.VarChar(40)
+  numero_chasis         String?        @db.VarChar(40)
+  estado                EstadoVehiculo @default(disponible)
+  kilometraje_actual    Int?           @default(0)
+  fecha_asignacion_rnpn DateTime?      @db.Date
+  observaciones         String?        @db.Text
+  created_at            DateTime       @default(now())
+  updated_at            DateTime       @updatedAt
+
+  conductores_habituales ConductorHabitual[]
+  asignaciones           AsignacionDiaria[]
+
+  @@map("vehiculo")
+}
+
+model ConductorHabitual {
+  id_conductor_hab Int       @id @default(autoincrement())
+  id_motorista     Int
+  id_vehiculo      Int
+  fecha_inicio     DateTime  @db.Date
+  fecha_fin        DateTime? @db.Date
+  turno            Turno     @default(diurno)
+  activo           Boolean   @default(true)
+  observaciones    String?   @db.Text
+  created_at       DateTime  @default(now())
+
+  motorista Motorista @relation(fields: [id_motorista], references: [id_motorista])
+  vehiculo  Vehiculo  @relation(fields: [id_vehiculo],  references: [id_vehiculo])
+
+  @@map("conductor_habitual")
+}
+
+model AreaDestino {
+  id_area      Int      @id @default(autoincrement())
+  nombre_area  String   @db.VarChar(120)
+  alias        String?  @db.VarChar(60)
+  tipo         TipoArea @default(interna)
+  departamento String?  @db.VarChar(60)
+  municipio    String?  @db.VarChar(60)
+  descripcion  String?  @db.Text
+  activo       Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  asignaciones AsignacionDiaria[]
+
+  @@map("area_destino")
+}
+
+model Semana {
+  id_semana        Int      @id @default(autoincrement())
+  fecha_inicio     DateTime @db.Date
+  fecha_fin        DateTime @db.Date
+  mes              Int?
+  anio             Int?
+  numero_semana    Int?
+  encargado_turno  String?  @db.VarChar(120)
+  observaciones    String?  @db.Text
+  created_at       DateTime @default(now())
+
+  asignaciones AsignacionDiaria[]
+  novedades    Novedad[]
+
+  @@unique([fecha_inicio, fecha_fin])
+  @@map("semana")
+}
+
+model AsignacionDiaria {
+  id_asignacion   Int           @id @default(autoincrement())
+  id_semana       Int
+  id_motorista    Int
+  id_vehiculo     Int?
+  id_area_destino Int?
+  fecha           DateTime      @db.Date
+  dia_semana      DiaSemana
+  tipo_actividad  TipoActividad @default(administrativo)
+  observaciones   String?       @db.Text
+  estado          String        @default("programado") @db.VarChar(20)
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+
+  semana       Semana       @relation(fields: [id_semana],       references: [id_semana])
+  motorista    Motorista    @relation(fields: [id_motorista],    references: [id_motorista])
+  vehiculo     Vehiculo?    @relation(fields: [id_vehiculo],     references: [id_vehiculo])
+  area_destino AreaDestino? @relation(fields: [id_area_destino], references: [id_area])
+
+  @@unique([id_motorista, fecha])
+  @@map("asignacion_diaria")
+}
+
+model Novedad {
+  id_novedad     Int         @id @default(autoincrement())
+  id_motorista   Int
+  id_semana      Int
+  fecha          DateTime    @db.Date
+  tipo_novedad   TipoNovedad
+  descripcion    String?     @db.Text
+  dias_afectados Int?        @default(1) @db.TinyInt
+  con_goce       Boolean?    @default(true)
+  created_at     DateTime    @default(now())
+
+  motorista Motorista @relation(fields: [id_motorista], references: [id_motorista])
+  semana    Semana    @relation(fields: [id_semana],    references: [id_semana])
+
+  @@map("novedad")
+}
+
+model Usuario {
+  id_usuario    Int        @id @default(autoincrement())
+  nombre        String     @db.VarChar(120)
+  correo        String     @unique @db.VarChar(120)
+  password_hash String     @db.VarChar(255)
+  rol           RolUsuario @default(consulta)
+  id_motorista  Int?       @unique
+  activo        Boolean    @default(true)
+  ultimo_acceso DateTime?
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+
+  motorista Motorista? @relation(fields: [id_motorista], references: [id_motorista])
+
+  @@map("usuario")
+}

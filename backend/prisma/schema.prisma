@@ -1,0 +1,253 @@
+// =============================================================
+//  RNPN — Prisma Schema para MySQL (SUVT)
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum EstadoMotorista {
+  activo
+  inactivo
+  destaque
+  baja
+  compensatorio
+  incapacitado
+}
+
+enum EstadoVehiculo {
+  disponible
+  en_uso
+  mantenimiento
+  baja
+}
+
+enum TipoVehiculo {
+  pickup
+  sedan
+  microbus
+  motocicleta
+  otro
+}
+
+enum TipoArea {
+  interna
+  institucional
+  externa
+  medica
+  penal
+  financiera
+}
+
+enum RolUsuario {
+  admin
+  auxiliar
+  seguridad
+  jefatura
+}
+
+enum EstadoMision {
+  solicitada
+  aprobada
+  rechazada
+  en_curso
+  finalizada
+}
+
+enum TipoEventoMision {
+  salida_base
+  llegada_destino
+  salida_destino
+  parada_tecnica
+  incidente
+  retorno_base
+  finalizacion
+}
+
+enum TipoMovimientoSeguridad {
+  salida_base
+  entrada_base
+}
+
+enum NivelCombustible {
+  E
+  un_cuarto @map("1/4")
+  un_medio @map("1/2")
+  tres_cuartos @map("3/4")
+  F
+}
+
+model Motorista {
+  id_motorista       Int              @id @default(autoincrement())
+  nombre             String           @db.VarChar(80)
+  apellido           String           @db.VarChar(80)
+  codigo_empleado    String           @unique @db.VarChar(20)
+  numero_licencia    String?          @db.VarChar(20)
+  categoria_licencia String?          @db.VarChar(10)
+  estado             EstadoMotorista  @default(activo)
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+
+  conductores_habituales ConductorHabitual[]
+  misiones               Mision[]
+  usuario                Usuario?
+
+  @@map("motorista")
+}
+
+model Vehiculo {
+  id_vehiculo           Int            @id @default(autoincrement())
+  placa                 String         @unique @db.VarChar(20)
+  marca                 String         @db.VarChar(60)
+  modelo                String         @db.VarChar(60)
+  anio                  Int?
+  clase                 String?        @db.VarChar(50)
+  tipo                  TipoVehiculo   @default(pickup)
+  estado                EstadoVehiculo @default(disponible)
+  kilometraje_actual    Int?           @default(0)
+  numero_hoja_transporte String?       @db.VarChar(50)
+  created_at            DateTime       @default(now())
+  updated_at            DateTime       @updatedAt
+
+  conductores_habituales ConductorHabitual[]
+  misiones               Mision[]
+  registros_combustible  RegistroCombustible[]
+
+  @@map("vehiculo")
+}
+
+model ConductorHabitual {
+  id_conductor_hab Int       @id @default(autoincrement())
+  id_motorista     Int
+  id_vehiculo      Int
+  fecha_inicio     DateTime  @db.Date
+  activo           Boolean   @default(true)
+  created_at       DateTime  @default(now())
+
+  motorista Motorista @relation(fields: [id_motorista], references: [id_motorista])
+  vehiculo  Vehiculo  @relation(fields: [id_vehiculo],  references: [id_vehiculo])
+
+  @@map("conductor_habitual")
+}
+
+model AreaDestino {
+  id_area      Int      @id @default(autoincrement())
+  nombre_area  String   @db.VarChar(120)
+  alias        String?  @db.VarChar(60)
+  tipo         TipoArea @default(interna)
+  departamento String?  @db.VarChar(60)
+  municipio    String?  @db.VarChar(60)
+  activo       Boolean  @default(true)
+
+  @@map("area_destino")
+}
+
+model UnidadOrganizativa {
+  id_unitat       Int      @id @default(autoincrement())
+  nombre_unidad   String   @db.VarChar(120)
+  id_jefe_usuario Int?
+  
+  jefe            Usuario? @relation("JefeUnidad", fields: [id_jefe_usuario], references: [id_usuario])
+  misiones        Mision[]
+
+  @@map("unidad_organizativa")
+}
+
+model Usuario {
+  id_usuario    Int        @id @default(autoincrement())
+  nombre        String     @db.VarChar(120)
+  correo        String     @unique @db.VarChar(120)
+  password_hash String     @db.VarChar(255)
+  rol           RolUsuario @default(auxiliar)
+  id_motorista  Int?       @unique
+  activo        Boolean    @default(true)
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+
+  motorista          Motorista?           @relation(fields: [id_motorista], references: [id_motorista])
+  unidades_a_cargo   UnidadOrganizativa[] @relation("JefeUnidad")
+  misiones_solicitadas Mision[]           @relation("Solicitante")
+  controles_seguridad ControlAccesoSeguridad[]
+
+  @@map("usuario")
+}
+
+model Mision {
+  id_mision              Int           @id @default(autoincrement())
+  id_usuario_solicitante Int
+  id_unidad              Int
+  id_vehiculo            Int?
+  id_motorista           Int?
+  objetivo_mision        String?       @db.VarChar(255)
+  persona_mision         String?       @db.Text
+  destino                String?       @db.VarChar(255)
+  fecha_mision           DateTime?     @db.Date
+  hora_mision            String?       @db.VarChar(10)
+  descripcion_mision     String?       @db.Text
+  estado_mision          EstadoMision  @default(solicitada)
+  documento_respaldo     String?       @db.VarChar(255)
+  justificacion_cambio_vehiculo String? @db.VarChar(255)
+  kilometraje_inicial    Int?
+  kilometraje_final      Int?
+  observaciones_mision   String?       @db.Text
+  fecha_solicitud        DateTime      @default(now())
+
+  solicitante           Usuario               @relation("Solicitante", fields: [id_usuario_solicitante], references: [id_usuario])
+  unidad                UnidadOrganizativa    @relation(fields: [id_unidad], references: [id_unitat])
+  vehiculo              Vehiculo?             @relation(fields: [id_vehiculo], references: [id_vehiculo])
+  motorista             Motorista?            @relation(fields: [id_motorista], references: [id_motorista])
+  movimientos           LogMovimientoMision[]
+  controles_acceso      ControlAccesoSeguridad[]
+  registros_combustible RegistroCombustible[]
+
+  @@map("mision")
+}
+
+model LogMovimientoMision {
+  id_log               Int              @id @default(autoincrement())
+  id_mision            Int
+  tipo_evento          TipoEventoMision
+  ubicacion            String           @db.VarChar(255)
+  fecha_hora           DateTime         @default(now())
+  kilometraje_registro Int?
+  nivel_combustible    NivelCombustible?
+
+  mision Mision @relation(fields: [id_mision], references: [id_mision], onDelete: Cascade)
+
+  @@map("log_movimientos_mision")
+}
+
+model ControlAccesoSeguridad {
+  id_control           Int                     @id @default(autoincrement())
+  id_mision            Int
+  id_usuario_seguridad Int
+  tipo_movimiento      TipoMovimientoSeguridad
+  fecha_hora           DateTime                @default(now())
+  observaciones        String?                 @db.Text
+
+  mision    Mision  @relation(fields: [id_mision], references: [id_mision])
+  seguridad Usuario @relation(fields: [id_usuario_seguridad], references: [id_usuario])
+
+  @@map("control_acceso_seguridad")
+}
+
+model RegistroCombustible {
+  id_registro_combustible Int      @id @default(autoincrement())
+  id_mision               Int?
+  id_vehiculo             Int
+  fecha_carga             DateTime @db.Date
+  cantidad_galones        Decimal  @db.Decimal(10, 2)
+  costo_total             Decimal? @db.Decimal(10, 2)
+  numero_vale_factura     String?  @db.VarChar(50)
+  kilometraje_al_cargar   Int?
+
+  vehiculo Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo])
+  mision   Mision?  @relation(fields: [id_mision], references: [id_mision])
+
+  @@map("registro_combustible")
+}

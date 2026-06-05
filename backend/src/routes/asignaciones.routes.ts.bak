@@ -1,0 +1,17 @@
+import { Router } from 'express'
+import * as asignacionController from '../controllers/asignaciones.controller'
+import { validarJWT } from '../middlewares/auth.middleware'
+import { bloquearAuxiliar } from '../middlewares/role.middleware'
+
+const router = Router()
+
+router.use(validarJWT)
+
+router.get('/', asignacionController.getAll)
+
+// Rutas de escritura protegidas contra rol Auxiliar
+router.post('/', bloquearAuxiliar, asignacionController.create)
+router.patch('/:id', bloquearAuxiliar, asignacionController.update)
+router.delete('/:id', bloquearAuxiliar, asignacionController.remove)
+
+export default router

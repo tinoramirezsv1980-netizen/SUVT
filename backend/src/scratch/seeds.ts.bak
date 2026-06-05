@@ -1,0 +1,47 @@
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+async function main() {
+  console.log('--- Iniciando Siembra de Datos Maestro ---')
+
+  // 1. Semanas (Crear las 52 semanas del año 2026)
+  const count = await prisma.semana.count()
+  if (count === 0) {
+    console.log('Siembra: Creando semanas para el año 2026...')
+    const year = 2026
+    
+    // Generar semanas para el año completo
+    for (let i = 1; i <= 52; i++) {
+        const firstDayOfYear = new Date(year, 0, 1)
+        const dayOffset = (i - 1) * 7
+        const startDate = new Date(year, 0, 1 + dayOffset)
+        const endDate = new Date(year, 0, 7 + dayOffset)
+
+        await prisma.semana.create({
+            data: {
+                numero_semana: i,
+                anio: year,
+                fecha_inicio: startDate,
+                fecha_fin: endDate
+            }
+        })
+    }
+    console.log('✅ 52 Semanas creadas correctamente.')
+  } else {
+    console.log('✅ Semanas ya existen en la base de datos.')
+  }
+
+  // 2. Asegurar que exista al menos un Area de Destino
+  const areasCount = await prisma.areaDestino.count()
+  if (areasCount === 0) {
+    await prisma.areaDestino.create({
+      data: { nombre_area: 'Sede Central San Salvador' }
+    })
+    console.log('✅ Area de Destino inicial creada.')
+  }
+}
+
+main()
+  .catch(e => console.error(e))
+  .finally(async () => await prisma.$disconnect())

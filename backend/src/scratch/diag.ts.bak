@@ -1,0 +1,27 @@
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
+
+async function main() {
+  console.log('--- Diagnóstico de Base de Datos ---')
+  
+  const usuarios = await prisma.usuario.findMany()
+  console.log('Cant. Usuarios:', usuarios.length)
+  console.log('Usuarios:', usuarios.map(u => ({ correo: u.correo, rol: u.rol, activo: u.activo })))
+  
+  const semanas = await prisma.semana.findMany()
+  console.log('Cant. Semanas:', semanas.length)
+  if (semanas.length === 0) {
+    console.log('⚠️ ADVERTENCIA: No existen registros en la tabla Semana. Las asignaciones fallarán.')
+  }
+
+  const motoristas = await prisma.motorista.findMany()
+  console.log('Cant. Motoristas:', motoristas.length)
+
+  const vehiculos = await prisma.vehiculo.findMany()
+  console.log('Cant. Vehículos:', vehiculos.length)
+}
+
+main()
+  .catch(e => console.error(e))
+  .finally(async () => await prisma.$disconnect())

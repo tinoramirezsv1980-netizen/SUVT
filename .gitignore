@@ -1,0 +1,31 @@
+# Dependencias
+node_modules/
+*/node_modules/
+
+# Variables de entorno
+.env
+.env.local
+.env.production
+backend/.env
+frontend/.env
+
+# Archivos de build
+dist/
+build/
+*.log
+
+# Base de datos local
+*.db
+*.sqlite
+*.sql
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Prisma (solo subes schema, no la base local)
+*.db-journal
