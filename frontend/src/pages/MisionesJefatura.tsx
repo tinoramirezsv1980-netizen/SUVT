@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -22,6 +23,8 @@ export default function MisionesJefatura() {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchParams] = useSearchParams();
+  const misionRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
   const fetchData = async () => {
     if (!user?.id) return;
@@ -52,6 +55,18 @@ export default function MisionesJefatura() {
       fetchData();
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    const misionId = searchParams.get('mision');
+    if (misionId && misiones.length > 0) {
+      const id = parseInt(misionId);
+      const el = misionRefs.current[id];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-[#1a73e8]', 'bg-blue-50');
+      }
+    }
+  }, [searchParams, misiones]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -159,7 +174,7 @@ export default function MisionesJefatura() {
                   </td>
                 </tr>
               ) : misiones.map((m) => (
-                <tr key={m.id_mision} className="hover:bg-blue-50/30 transition-colors group">
+                <tr key={m.id_mision} ref={(el) => { misionRefs.current[m.id_mision] = el; }} className="hover:bg-blue-50/30 transition-colors group">
                   <td className="p-6">
                     <div className="flex flex-col">
                       <span className="font-black text-[#1a73e8]">#M-{m.id_mision}</span>

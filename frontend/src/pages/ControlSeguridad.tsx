@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   ShieldCheck, 
   Search, 
@@ -21,6 +22,7 @@ export default function ControlSeguridad() {
   const [selectedMision, setSelectedMision] = useState<Mision | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tipoMovimiento, setTipoMovimiento] = useState<'salida_base' | 'entrada_base'>('salida_base');
+  const [searchParams] = useSearchParams();
 
   const fetchData = async () => {
     try {
@@ -40,6 +42,18 @@ export default function ControlSeguridad() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const misionId = searchParams.get('mision');
+    if (misionId && misiones.length > 0) {
+      const id = parseInt(misionId);
+      const mision = misiones.find(m => m.id_mision === id);
+      if (mision) {
+        const tipo = mision.estado_mision === 'aprobada' ? 'salida_base' : 'entrada_base';
+        handleOpenModal(mision, tipo);
+      }
+    }
+  }, [searchParams, misiones]);
 
   const handleOpenModal = (mision: Mision, tipo: 'salida_base' | 'entrada_base') => {
     setSelectedMision(mision);

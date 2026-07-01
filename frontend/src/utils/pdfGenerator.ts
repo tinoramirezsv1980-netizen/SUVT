@@ -227,8 +227,9 @@ export const generateMisionPDF = async (mision: any) => {
   doc.text('Firma: __________', pageWidth - margin - 30, 262);
 
   // --- GENERACIÓN ---
-  const pdfData = doc.output('datauristring');
-  const printWindow = window.open(pdfData, '_blank');
+  const pdfBlob = doc.output('blob');
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  const printWindow = window.open(pdfUrl, '_blank');
   
   if (!printWindow) {
     doc.save(`Mision_Oficial_${mision.id_mision}.pdf`);

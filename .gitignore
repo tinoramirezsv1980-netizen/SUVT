@@ -9,15 +9,23 @@ node_modules/
 backend/.env
 frontend/.env
 
-# Archivos de build
+# Build
 dist/
 build/
+
+# Logs
 *.log
+logs/
+npm-debug.log*
 
 # Base de datos local
 *.db
 *.sqlite
-*.sql
+*.db-journal
+
+# Ignorar respaldos grandes
+*_backup.sql
+*_full_backup.sql
 
 # IDE
 .vscode/
@@ -26,6 +34,18 @@ build/
 # Sistema operativo
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Prisma (solo subes schema, no la base local)
-*.db-journal
+# Archivos temporales
+*.tmp
+*.cache
+coverage/
+
+# Deploy
+.vercel/
+
+# Uploads
+backend/uploads/
+
+# Archivos de respaldo
+package-lock.json.bak

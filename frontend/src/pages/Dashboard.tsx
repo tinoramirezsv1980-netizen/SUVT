@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   Car, 
@@ -28,6 +29,7 @@ import { FileText, History, LayoutDashboard } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [asignacionesHoy, setAsignacionesHoy] = useState<Asignacion[]>([]);
   const [historialMisiones, setHistorialMisiones] = useState<Asignacion[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
@@ -293,7 +295,16 @@ export default function Dashboard() {
               ) : asignacionesHoy.map((asig) => {
                 const style = getAlertStyle(asig);
                 return (
-                  <div key={asig.id_asignacion} className={`group p-5 bg-white rounded-2xl border ${style.border} transition-all relative overflow-hidden`}>
+                  <div 
+                    key={asig.id_asignacion} 
+                    onClick={() => {
+                      const id = asig.id_asignacion;
+                      if (user?.rol === 'admin') navigate(`/programacion?mision=${id}`);
+                      else if (user?.rol === 'jefatura') navigate(`/misiones-solicitud?mision=${id}`);
+                      else if (user?.rol === 'auxiliar' || user?.id_motorista) navigate(`/panel-motorista?mision=${id}`);
+                      else if (user?.rol === 'seguridad') navigate(`/control-acceso?mision=${id}`);
+                    }}
+                    className={`group p-5 bg-white rounded-2xl border ${style.border} transition-all relative overflow-hidden cursor-pointer hover:shadow-lg hover:-translate-y-0.5`}>
                     {asig.estado === 'programado' && asig.hora_salida && (
                       <div className={`absolute top-0 right-0 w-1.5 h-full ${style.text.replace('text-', 'bg-')}`} />
                     )}
@@ -308,6 +319,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
+                        <span className="text-[10px] font-black text-[#1a73e8]">#M-{asig.id_asignacion}</span>
                         <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${asig.estado === 'programado' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
                           {asig.estado}
                         </span>
@@ -326,7 +338,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
                       <MapPin size={14} className="text-emerald-500 opacity-60" />
-                      <span>{asig.area_destino?.nombre_area || 'Sede Central'}</span>
+                      <span>{asig.destino || asig.area_destino?.nombre_area || 'Sede Central'}</span>
                     </div>
                   </div>
                   </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Navigation, 
   MapPin, 
@@ -16,6 +17,7 @@ import type { Mision } from '../types';
 
 export default function PanelMotorista() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [misionesActivas, setMisionesActivas] = useState<Mision[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,6 +85,18 @@ export default function PanelMotorista() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const misionId = searchParams.get('mision');
+    if (misionId && misionesActivas.length > 0) {
+      const id = parseInt(misionId);
+      const el = document.getElementById(`mision-card-${id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-emerald-400');
+      }
+    }
+  }, [searchParams, misionesActivas]);
 
   const handleRegisterEvent = async (id_mision: number, tipo_evento: string, ubicacion: string, km?: number, fuel?: string) => {
     setIsSubmitting(true);
@@ -169,7 +183,7 @@ export default function PanelMotorista() {
         </div>
       ) : (
         misionesActivas.map(m => (
-          <div key={m.id_mision} className="glass rounded-[2rem] md:rounded-[3rem] overflow-hidden border border-white/40 shadow-2xl animate-in slide-in-from-bottom-8 duration-500">
+          <div key={m.id_mision} id={`mision-card-${m.id_mision}`} className="glass rounded-[2rem] md:rounded-[3rem] overflow-hidden border border-white/40 shadow-2xl animate-in slide-in-from-bottom-8 duration-500">
             <div className="p-4 sm:p-6 md:p-8 bg-[#1a73e8] text-white space-y-4">
               <div className="flex justify-between items-start">
                 <div>

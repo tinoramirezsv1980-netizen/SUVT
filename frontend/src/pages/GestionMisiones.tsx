@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   CheckCircle, 
   XCircle, 
@@ -27,6 +28,7 @@ export default function GestionMisiones() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState<number | null>(null);
   const [filtro, setFiltro] = useState<'todas' | 'solicitadas' | 'en_curso'>('todas');
+  const [searchParams] = useSearchParams();
   
   // States for vehicle auto-assignment
   const [selectedMotoristaId, setSelectedMotoristaId] = useState<number | ''>('');
@@ -59,6 +61,19 @@ export default function GestionMisiones() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const misionId = searchParams.get('mision');
+    if (misionId && misiones.length > 0) {
+      const mision = misiones.find(m => m.id_mision === parseInt(misionId));
+      if (mision && mision.estado_mision === 'solicitada') {
+        setSelectedMision(mision);
+        setSelectedMotoristaId(mision.id_motorista || '');
+        setUseHabitualVehicle(true);
+        setIsModalOpen(true);
+      }
+    }
+  }, [searchParams, misiones]);
 
   const handleAssign = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
