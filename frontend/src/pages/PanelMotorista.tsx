@@ -7,7 +7,7 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Loader2,
-  ChevronRight,
+  //ChevronRight,
   LogOut,
   Car
 } from 'lucide-react';

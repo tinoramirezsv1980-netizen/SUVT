@@ -15,16 +15,19 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/axios';
-import type { Asignacion, Motorista, Vehiculo } from '../types';
+import type { Mision, Motorista, Vehiculo } from '../types';
 
 export default function Programacion() {
   const { user } = useAuth();
-  const [asignaciones, setAsignaciones] = useState<Asignacion[]>([]);
+  const [asignaciones, setAsignaciones] = useState<Mision[]>([]);
+  
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedAsignacion, setSelectedAsignacion] = useState<Asignacion | null>(null);
+  
+  
+  const [selectedAsignacion, setSelectedAsignacion] =useState<Mision | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aplicaVales, setAplicaVales] = useState(false);
 
@@ -55,11 +58,13 @@ export default function Programacion() {
     try {
       setLoading(true);
       const [respAsig, respMot, respVeh] = await Promise.all([
-        api.get('/asignaciones'),
+        
+		api.get('/misiones'),
         api.get('/motoristas'),
         api.get('/vehiculos')
       ]);
-      setAsignaciones(respAsig.data.asignaciones);
+      
+	  setAsignaciones(respAsig.data.misiones);
       setMotoristas(respMot.data.motoristas);
       setVehiculos(respVeh.data.vehiculos);
     } catch (error) {
@@ -69,13 +74,18 @@ export default function Programacion() {
     }
   };
 
-  const handleOpenModal = (asig: Asignacion | null = null) => {
-    setSelectedAsignacion(asig);
-    setSelectedMotoristaId(asig?.id_motorista || null);
-    setShowAllVehiculos(false);
-    setAplicaVales(asig?.aplica_vales || false);
-    setIsModalOpen(true);
-  };
+const handleOpenModal = (mision: Mision | null = null) => {
+  setSelectedAsignacion(mision);
+
+  setSelectedMotoristaId(mision?.id_motorista || null);
+
+  setShowAllVehiculos(false);
+
+  // Las misiones ya no manejan aplica_vales
+  setAplicaVales(false);
+
+  setIsModalOpen(true);
+};
 
   const handleCloseModal = () => {
     setSelectedAsignacion(null);
@@ -118,8 +128,9 @@ export default function Programacion() {
     e.preventDefault();
     
     const formData = new FormData(e.currentTarget);
-    const nuevoEstado = formData.get('estado') as string;
-    const estadoAnterior = selectedAsignacion?.estado || '';
+    
+	const nuevoEstado = formData.get('estado') as string;
+    const estadoAnterior = selectedAsignacion?.estado_mision || '';
     const kmRetorno = formData.get('kilometraje_retorno') ? parseInt(formData.get('kilometraje_retorno') as string) : null;
     const hojaRetorno = (formData.get('hoja_transporte_rnpn') as string) || '';
 
@@ -127,7 +138,7 @@ export default function Programacion() {
     const transicionandoAFinalizada = nuevoEstado === 'finalizada' && estadoAnterior !== 'finalizada';
     if (transicionandoAFinalizada) {
       if (!kmRetorno || !hojaRetorno.trim()) {
-        alert('Para finalizar la misión debe ingresar el Kilometraje de Retorno y el No. de Hoja de Transporte RNPN.');
+        alert('Para finalizar la misión debe ingresar el Kilometraje de Retorno y el Documento de Respaldo.');
         return;
       }
 
@@ -173,12 +184,12 @@ export default function Programacion() {
       hoja_transporte_rnpn: hojaRetorno,
       aplica_vales: formData.get('aplica_vales') === 'on',
       detalle_vales: formData.get('detalle_vales') as string || null,
-      id_semana: selectedAsignacion?.id_semana || 1
+      
     };
 
     try {
       if (selectedAsignacion) {
-        await api.patch(`/asignaciones/${selectedAsignacion.id_asignacion}`, data);
+        await api.patch(`/misiones/${selectedAsignacion.id_mision}`, data);
         
         // Si se ACABA de finalizar (transición nueva), actualizar el kilometraje MAESTRO del vehículo
         if (transicionandoAFinalizada && id_vehiculo && kmRetorno) {
@@ -188,7 +199,7 @@ export default function Programacion() {
           });
         }
       } else {
-        await api.post('/asignaciones', data);
+        await api.post('/misiones', data);
       }
       fetchData();
       handleCloseModal();
@@ -213,42 +224,75 @@ export default function Programacion() {
   const weekDays = [0, 1, 2, 3, 4, 5, 6].map(offset => getDayLabel(offset));
   const hoyStr = new Date().toISOString().split('T')[0];
 
-  const getAlertStyle = (asig: Asignacion) => {
-    const estado = asig.estado?.toLowerCase() || 'programado';
-    const isHoy = asig.fecha.startsWith(hoyStr);
+  const getAlertStyle = (mision: Mision) => {
+  const estado = mision.estado_mision;
 
-    // Colores base por estado (Bordes e Iconos)
-    const baseStyles: Record<string, { border: string, text: string, bg: string }> = {
-      programado: { border: 'border-blue-200', text: 'text-blue-600', bg: 'bg-white' },
-      iniciada: { border: 'border-emerald-500', text: 'text-emerald-600', bg: 'bg-white' },
-      en_desarrollo: { border: 'border-indigo-500', text: 'text-indigo-600', bg: 'bg-white' },
-      suspendida: { border: 'border-amber-500', text: 'text-amber-600', bg: 'bg-white' },
-      finalizada: { border: 'border-gray-200 opacity-60', text: 'text-gray-400', bg: 'bg-white' }
-    };
+  const baseStyles = {
+    solicitada: {
+      border: 'border-yellow-300',
+      text: 'text-yellow-600',
+      bg: 'bg-white'
+    },
+    aprobada: {
+      border: 'border-blue-300',
+      text: 'text-blue-600',
+      bg: 'bg-white'
+    },
+    en_curso: {
+      border: 'border-emerald-500',
+      text: 'text-emerald-600',
+      bg: 'bg-white'
+    },
+    finalizada: {
+      border: 'border-gray-200 opacity-60',
+      text: 'text-gray-400',
+      bg: 'bg-white'
+    },
+    rechazada: {
+      border: 'border-red-300',
+      text: 'text-red-600',
+      bg: 'bg-white'
+    }
+  };
 
-    let style = baseStyles[estado] || baseStyles.programado;
+  let style = baseStyles[estado] ?? baseStyles.solicitada;
 
-    // Lógica de tiempo solo para programado o iniciada
-    if ((estado === 'programado' || estado === 'iniciada') && asig.hora_salida && isHoy) {
-      const [hours, minutes] = asig.hora_salida.split(':').map(Number);
-      const missionTime = new Date();
-      missionTime.setHours(hours, minutes, 0, 0);
+  const isHoy = mision.fecha_mision.startsWith(hoyStr);
 
-      const now = new Date();
-      const diffMins = (missionTime.getTime() - now.getTime()) / (1000 * 60);
+  if (
+    estado === 'aprobada' &&
+    mision.hora_mision &&
+    isHoy
+  ) {
+    const [hours, minutes] = mision.hora_mision
+      .split(':')
+      .map(Number);
 
-      if (diffMins < -15) {
-        // Retraso crítico: Cambiar a Rojo
-        return { border: 'border-red-500 shadow-lg shadow-red-100', text: 'text-red-600', bg: 'bg-white' };
-      }
-      if (diffMins <= 60) {
-        // Próximo: Cambiar a Ámbar/Naranja
-        return { border: 'border-orange-400', text: 'text-orange-500', bg: 'bg-white' };
-      }
+    const missionTime = new Date();
+    missionTime.setHours(hours, minutes, 0, 0);
+
+    const diffMins =
+      (missionTime.getTime() - Date.now()) / 60000;
+
+    if (diffMins < -15) {
+      return {
+        border: 'border-red-500 shadow-lg shadow-red-100',
+        text: 'text-red-600',
+        bg: 'bg-white'
+      };
     }
 
-    return style;
-  };
+    if (diffMins <= 60) {
+      return {
+        border: 'border-orange-400',
+        text: 'text-orange-500',
+        bg: 'bg-white'
+      };
+    }
+  }
+
+  return style;
+};
 
   // Obtener el conteo de misiones del motorista
   const motoristaSelected = selectedMotoristaId 
@@ -301,7 +345,7 @@ export default function Programacion() {
         <div className="overflow-x-auto -mx-4 px-4 pb-4">
           <div className="grid grid-cols-7 gap-4 md:gap-6 min-w-[700px] md:min-w-0">
           {weekDays.map((day) => {
-             const dayAsignaciones = asignaciones.filter(a => a.fecha.startsWith(day.isoStr));
+             const dayAsignaciones = asignaciones.filter(a => a.fecha_mision && a.fecha_mision.startsWith(day.isoStr));
              return (
                <div key={day.isoStr} className="space-y-4">
                  <div className="text-center p-4 bg-white rounded-3xl border border-gray-100 shadow-sm">
@@ -315,37 +359,37 @@ export default function Programacion() {
                         <Clock size={24} className="mb-2 opacity-20" />
                         <span className="text-[10px] font-bold uppercase text-center">Sin misiones</span>
                      </div>
-                   ) : dayAsignaciones.map((asig) => {
+                   ) : dayAsignaciones.map((asig: Mision) => {
                      const style = getAlertStyle(asig);
                      return (
                        <div 
-                         key={asig.id_asignacion} 
+                         key={asig.id_mision} 
                          onClick={() => handleOpenModal(asig)}
                          className={`p-4 bg-white rounded-2xl border-2 ${style.border} transition-all group relative overflow-hidden cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-95`}
                        >
-                         {asig.estado === 'programado' && asig.hora_salida && asig.fecha.startsWith(hoyStr) && (
+                         {asig.estado_mision === 'aprobada' && asig.hora_mision && asig.fecha_mision && asig.fecha_mision.startsWith(hoyStr) && (
                             <div className={`absolute top-0 right-0 w-1.5 h-full ${style.text.replace('text-', 'bg-')}`} />
                          )}
                          <div className="flex items-start justify-between mb-3">
                             <div className={`w-8 h-8 rounded-xl ${style.text.replace('text-', 'bg-')} flex items-center justify-center font-bold text-[10px] text-white shadow-sm`}>
-                               {asig.motorista.nombre[0]}{asig.motorista.apellido[0]}
+                               {asig.motorista?.nombre?.[0]}{asig.motorista?.apellido?.[0]}
                             </div>
                             <div className="flex flex-col items-end gap-1">
                               <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full uppercase">
-                                 {asig.estado}
+                                 {asig.estado_mision}
                               </span>
-                              {asig.hora_salida && (
+                              {asig.hora_mision && (
                                 <span className={`text-[9px] font-black ${style.text} flex items-center gap-1`}>
                                   <Clock size={10} />
-                                  {asig.hora_salida}
+                                  {asig.hora_mision}
                                 </span>
                               )}
                             </div>
                          </div>
-                         <p className="text-xs font-black text-[#174ea6] mb-0.5">{asig.motorista.nombre} {asig.motorista.apellido}</p>
-                         <p className={`text-[9px] font-bold uppercase mb-1 ${style.text}`}>{asig.mision || asig.tipo_actividad}</p>
-                         {asig.tipo_actividad && (
-                           <span className="text-[7px] font-black uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full mb-2 inline-block">{asig.tipo_actividad}</span>
+                         <p className="text-xs font-black text-[#174ea6] mb-0.5">{asig.motorista?.nombre} {asig.motorista?.apellido}</p>
+                         <p className={`text-[9px] font-bold uppercase mb-1 ${style.text}`}>{asig.objetivo_mision || asig.descripcion_mision}</p>
+                         {asig.persona_mision && (
+                           <span className="text-[7px] font-black uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full mb-2 inline-block">{(asig as any).tipo_actividad || 'Misión'}</span>
                          )}
                          
                          <div className="flex flex-col gap-1.5 pt-3 border-t border-gray-50">
@@ -355,19 +399,19 @@ export default function Programacion() {
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-medium">
                                <MapPin size={12} className="text-emerald-500 opacity-40" />
-                               <span className="truncate">{asig.destino || asig.area_destino?.nombre_area || 'Sede Central'}</span>
+                               <span className="truncate">{asig.destino || 'Sede Central'}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-black uppercase mt-1">
-                               <span className="truncate">Unidad: {asig.unidad_solicitante || 'N/A'}</span>
+                               <span className="truncate">Unidad: {asig.unidad?.nombre_unidad || (asig as any).unidad_solicitante || 'N/A'}</span>
                             </div>
-                            {asig.estado === 'finalizada' && asig.kilometraje_retorno && (
+                            {asig.estado_mision === 'finalizada' && asig.kilometraje_final && (
                               <div className="mt-2 p-2 bg-gray-50 rounded-lg border border-gray-100 flex flex-col gap-1">
                                 <div className="flex justify-between items-center text-[8px] font-black uppercase text-gray-400">
                                   <span>Km Retorno</span>
-                                  <span className="text-emerald-600">{asig.kilometraje_retorno}</span>
+                                  <span className="text-emerald-600">{asig.kilometraje_final}</span>
                                 </div>
                                  <div className="text-[7px] text-gray-400 truncate">
-                                   Doc: {asig.hoja_transporte_rnpn}
+                                   Doc: {asig.documento_respaldo || (asig as any).hoja_transporte_rnpn}
                                  </div>
                                </div>
                              )}
@@ -408,7 +452,7 @@ export default function Programacion() {
                   <select 
                     name="id_motorista" 
                     required 
-                    defaultValue={selectedAsignacion?.id_motorista} 
+                    defaultValue={selectedAsignacion?.id_motorista ?? ''} 
                     onChange={handleMotoristaChange}
                     className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold appearance-none"
                   >
@@ -425,7 +469,7 @@ export default function Programacion() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Estado de la Misión</label>
-                  <select name="estado" required defaultValue={selectedAsignacion?.estado || 'programado'} className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-[#1a73e8] rounded-2xl transition-all text-sm font-black appearance-none text-[#1a73e8]">
+                  <select name="estado" required defaultValue={selectedAsignacion?.estado_mision || 'programado'} className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-[#1a73e8] rounded-2xl transition-all text-sm font-black appearance-none text-[#1a73e8]">
                     <option value="programado">📅 PROGRAMADA</option>
                     <option value="iniciada">🚀 INICIADA</option>
                     <option value="en_desarrollo">🔄 EN DESARROLLO</option>
@@ -437,7 +481,7 @@ export default function Programacion() {
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Tipo de Actividad</label>
-                <select name="tipo_actividad" required defaultValue={selectedAsignacion?.tipo_actividad || 'Gestión Interna'} className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold appearance-none">
+                <select name="tipo_actividad" required defaultValue={(selectedAsignacion as any)?.tipo_actividad || 'Gestión Interna'} className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold appearance-none">
                   <option value="DUI a Domicilio">🏠 DUI a Domicilio</option>
                   <option value="Ruta Institucional">🛣️ Ruta Institucional</option>
                   <option value="Taller / Mantenimiento">🔧 Taller / Mantenimiento</option>
@@ -490,14 +534,14 @@ export default function Programacion() {
                 </div>
                 <div className="space-y-2">
                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Fecha</label>
-                   <input name="fecha" type="date" required defaultValue={selectedAsignacion ? selectedAsignacion.fecha.split('T')[0] : ''} className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold" />
+                   <input name="fecha" type="date" required defaultValue={selectedAsignacion && selectedAsignacion.fecha_mision ? selectedAsignacion.fecha_mision.split('T')[0] : ''} className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Unidad Solicitante</label>
-                  <input name="unidad_solicitante" defaultValue={selectedAsignacion?.unidad_solicitante} placeholder="Ej: Dirección de TI" required className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold" />
+                  <input name="unidad_solicitante" defaultValue={selectedAsignacion?.unidad?.nombre_unidad || (selectedAsignacion as any)?.unidad_solicitante} placeholder="Ej: Dirección de TI" required className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Destino Específico</label>
@@ -508,11 +552,11 @@ export default function Programacion() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Misión / Actividad</label>
-                  <input name="mision" defaultValue={selectedAsignacion?.mision} placeholder="Ej: Entrega de documentos" required className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold" />
+                  <input name="mision" defaultValue={selectedAsignacion?.descripcion_mision || (selectedAsignacion as any)?.mision} placeholder="Ej: Entrega de documentos" required className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Hora de Salida</label>
-                  <input name="hora_salida" type="time" defaultValue={selectedAsignacion?.hora_salida} required className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold" />
+                  <input name="hora_salida" type="time" defaultValue={selectedAsignacion?.hora_mision ?? ''} required className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-2xl transition-all text-sm font-bold" />
                 </div>
               </div>
 
@@ -534,7 +578,7 @@ export default function Programacion() {
                     <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Detalle de Vales de Combustible</label>
                     <textarea 
                       name="detalle_vales" 
-                      defaultValue={selectedAsignacion?.detalle_vales}
+                      defaultValue={(selectedAsignacion as any)?.detalle_vales}
                       placeholder="Ej: Vale #12345 por $20.00 asignado al vehículo..." 
                       className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-[#1a73e8] rounded-2xl transition-all text-sm font-bold min-h-[80px] resize-y" 
                       required={aplicaVales}
@@ -550,7 +594,7 @@ export default function Programacion() {
                     <input 
                       name="kilometraje_retorno" 
                       type="number" 
-                      defaultValue={selectedAsignacion?.kilometraje_retorno}
+                      defaultValue={selectedAsignacion?.kilometraje_final}
                       placeholder={selectedAsignacion?.vehiculo ? `Actual: ${selectedAsignacion.vehiculo.kilometraje_actual}` : "Ingrese KM final"}
                       className="w-full px-5 py-4 bg-white border-transparent focus:ring-2 focus:ring-[#1a73e8] rounded-2xl transition-all text-sm font-black text-[#1a73e8]" 
                     />
@@ -559,7 +603,7 @@ export default function Programacion() {
                     <label className="text-[10px] font-black uppercase text-blue-400 ml-1">No. de Hoja de Transporte RNPN</label>
                     <input 
                       name="hoja_transporte_rnpn" 
-                      defaultValue={selectedAsignacion?.hoja_transporte_rnpn}
+                      defaultValue={selectedAsignacion?.documento_respaldo || (selectedAsignacion as any)?.hoja_transporte_rnpn}
                       placeholder="Ej: HOJA-2024-001" 
                       className="w-full px-5 py-4 bg-white border-transparent focus:ring-2 focus:ring-[#1a73e8] rounded-2xl transition-all text-sm font-black text-[#1a73e8]" 
                     />

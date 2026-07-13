@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   ShieldCheck, 
-  Search, 
+  //Search, 
   Car, 
   ArrowUpRight, 
   ArrowDownLeft, 
   Loader2,
   CheckCircle2,
-  Gauge
+  //Gauge
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../contexts/AuthContext';

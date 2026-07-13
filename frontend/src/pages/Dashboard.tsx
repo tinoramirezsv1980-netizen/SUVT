@@ -11,11 +11,6 @@ import {
   X
 } from 'lucide-react';
 import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
   Cell,
@@ -24,14 +19,14 @@ import {
 } from 'recharts';
 import api from '../api/axios';
 import { useAuth } from '../contexts/AuthContext';
-import type { Asignacion, Vehiculo, Motorista } from '../types';
+import type { Mision, Vehiculo, Motorista } from '../types';
 import { FileText, History, LayoutDashboard } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [asignacionesHoy, setAsignacionesHoy] = useState<Asignacion[]>([]);
-  const [historialMisiones, setHistorialMisiones] = useState<Asignacion[]>([]);
+  const [misionesHoy, setMisionesHoy] = useState<Mision[]>([]);
+  const [historialMisiones, setHistorialMisiones] = useState<Mision[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [selectedEstadoMotorista, setSelectedEstadoMotorista] = useState<string | null>(null);
@@ -60,18 +55,22 @@ export default function Dashboard() {
           });
         }
 
-        const allMapped = misionesRaw.map((m: any) => ({
-          ...m,
-          id_asignacion: m.id_mision,
-          fecha: m.fecha_mision || m.fecha_solicitud || '',
-          mision: m.objetivo_mision || m.descripcion_mision || '',
-          estado: m.estado_mision
-        }));
-
-        const misAsignacionesHoy = allMapped.filter((a: any) => a.fecha && a.fecha.startsWith(hoy));
-        
-        setAsignacionesHoy(misAsignacionesHoy);
-        setHistorialMisiones(allMapped.sort((a, b) => new Date(b.fecha_solicitud).getTime() - new Date(a.fecha_solicitud).getTime()));
+  const allMapped: Mision[] = misionesRaw;
+  const misionesDeHoy = allMapped.filter((m: Mision) => {
+  const fecha = m.fecha_mision || m.fecha_solicitud;
+  return fecha && fecha.startsWith(hoy);
+  });
+  setMisionesHoy(misionesDeHoy);
+  setHistorialMisiones(
+  [...allMapped].sort(
+  (a: Mision, b: Mision) =>
+  new Date(b.fecha_solicitud).getTime() -
+  new Date(a.fecha_solicitud).getTime()
+  )
+  );
+		
+		
+		
         setVehiculos(respVeh.data?.vehiculos || []);
         setMotoristas(respMot.data?.motoristas || []);
       } catch (error) {
@@ -85,12 +84,12 @@ export default function Dashboard() {
 
 
 
-  const getAlertStyle = (asig: Asignacion) => {
-    if (asig.estado !== 'programado' || !asig.hora_salida) {
+  const getAlertStyle = (m: Mision) => {
+    if (m.estado_mision !== 'aprobada' || !m.hora_mision) {
       return { border: 'border-gray-100', text: 'text-emerald-600' };
     }
 
-    const [hours, minutes] = asig.hora_salida.split(':').map(Number);
+    const [hours, minutes] = m.hora_mision.split(':').map(Number);
     const missionTime = new Date();
     missionTime.setHours(hours, minutes, 0, 0);
 
@@ -108,13 +107,13 @@ export default function Dashboard() {
     return { border: 'border-gray-100', text: 'text-emerald-600' };
   };
 
-  const googlePalette = ['#4285F4', '#34A853', '#FBBC05', '#EA4335'];
+  //const googlePalette = ['#4285F4', '#34A853', '#FBBC05', '#EA4335'];
 
   const stats = [
     { label: 'Vehículos Totales', value: vehiculos.length, icon: Car, color: 'text-[#4285F4]', bg: 'bg-blue-50' },
     { label: 'En Mantenimiento', value: vehiculos.filter(v => v.estado === 'mantenimiento').length, icon: AlertCircle, color: 'text-[#EA4335]', bg: 'bg-red-50' },
-    { label: 'Misiones Hoy', value: asignacionesHoy.length, icon: Users, color: 'text-[#FBBC05]', bg: 'bg-amber-50' },
-    { label: 'Completadas', value: asignacionesHoy.filter(a => a.estado === 'completado').length, icon: CheckCircle2, color: 'text-[#34A853]', bg: 'bg-emerald-50' },
+    { label: 'Misiones Hoy', value: misionesHoy.length, icon: Users, color: 'text-[#FBBC05]', bg: 'bg-amber-50' },
+    { label: 'Finalizada', value: misionesHoy.filter(mision => mision.estado_mision === 'finalizada').length, icon: CheckCircle2, color: 'text-[#34A853]', bg: 'bg-emerald-50' },
   ];
 
   const motoristaEstados = [
@@ -283,29 +282,29 @@ export default function Dashboard() {
                 {(user?.rol === 'jefatura' || user?.rol === 'seguridad' || user?.rol === 'auxiliar' || user?.id_motorista) ? (user?.id_motorista ? 'Tus Misiones de Hoy' : 'Misiones de Hoy') : 'Misiones de Hoy'}
               </h2>
               <span className="text-[10px] font-bold bg-[#1a73e8] text-white px-3 py-1 rounded-full uppercase self-start md:self-auto">
-                {asignacionesHoy.length} Total
+                {misionesHoy.length} Total
               </span>
             </div>
 
             <div className={`space-y-4 ${(user?.rol === 'jefatura' || user?.rol === 'seguridad' || user?.rol === 'auxiliar' || user?.id_motorista) ? '' : 'max-h-[400px] overflow-y-auto pr-2 custom-scrollbar'}`}>
-              {asignacionesHoy.length === 0 ? (
+              {misionesHoy.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                   <p className="text-sm font-medium italic">No hay misiones programadas para hoy</p>
                 </div>
-              ) : asignacionesHoy.map((asig) => {
+              ) : misionesHoy.map((asig) => {
                 const style = getAlertStyle(asig);
                 return (
                   <div 
-                    key={asig.id_asignacion} 
+                    key={asig.id_mision} 
                     onClick={() => {
-                      const id = asig.id_asignacion;
+                      const id = asig.id_mision;
                       if (user?.rol === 'admin') navigate(`/programacion?mision=${id}`);
                       else if (user?.rol === 'jefatura') navigate(`/misiones-solicitud?mision=${id}`);
                       else if (user?.rol === 'auxiliar' || user?.id_motorista) navigate(`/panel-motorista?mision=${id}`);
                       else if (user?.rol === 'seguridad') navigate(`/control-acceso?mision=${id}`);
                     }}
                     className={`group p-5 bg-white rounded-2xl border ${style.border} transition-all relative overflow-hidden cursor-pointer hover:shadow-lg hover:-translate-y-0.5`}>
-                    {asig.estado === 'programado' && asig.hora_salida && (
+                    {asig.estado_mision === 'aprobada' && asig.hora_mision && (
                       <div className={`absolute top-0 right-0 w-1.5 h-full ${style.text.replace('text-', 'bg-')}`} />
                     )}
                     <div className="flex justify-between items-start mb-3">
@@ -315,18 +314,18 @@ export default function Dashboard() {
                         </div>
                         <div>
                           <p className="text-sm font-black text-[#174ea6]">{asig.motorista ? `${asig.motorista.nombre} ${asig.motorista.apellido}` : 'Sin Asignar'}</p>
-                          <p className={`text-[10px] font-bold uppercase tracking-tight ${style.text}`}>{asig.mision || asig.objetivo_mision || asig.tipo_actividad}</p>
+                          <p className={`text-[10px] font-bold uppercase tracking-tight ${style.text}`}>{asig.objetivo_mision}</p>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-black text-[#1a73e8]">#M-{asig.id_asignacion}</span>
-                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${asig.estado === 'programado' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                          {asig.estado}
+                        <span className="text-[10px] font-black text-[#1a73e8]">#M-{asig.id_mision}</span>
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${asig.estado_mision === 'aprobada' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                          {asig.estado_mision}
                         </span>
-                        {asig.hora_salida && (
+                        {asig.hora_mision && (
                           <span className={`text-[10px] font-black ${style.text} flex items-center gap-1`}>
                             <Clock size={12} />
-                            {asig.hora_salida}
+                            {asig.hora_mision}
                           </span>
                         )}
                       </div>
@@ -338,7 +337,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
                       <MapPin size={14} className="text-emerald-500 opacity-60" />
-                      <span>{asig.destino || asig.area_destino?.nombre_area || 'Sede Central'}</span>
+                      <span>{asig.destino || 'Sede Central'}</span>
                     </div>
                   </div>
                   </div>

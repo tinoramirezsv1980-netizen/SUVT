@@ -54,21 +54,21 @@ export interface Mision {
   id_mision: number;
   id_usuario_solicitante: number;
   id_unidad: number;
-  id_vehiculo?: number;
-  id_motorista?: number;
+  id_vehiculo?: number | null;
+  id_motorista?: number | null;
   objetivo_mision?: string;
   persona_mision?: string;
   destino?: string;
   fecha_mision: string;
   hora_mision: string;
   descripcion_mision: string;
+  estado_mision: EstadoMision;
+  fecha_solicitud: string;
+  documento_respaldo?: string;
   justificacion_cambio_vehiculo?: string;
   kilometraje_inicial?: number;
   kilometraje_final?: number;
   observaciones_mision?: string;
-  estado_mision: EstadoMision;
-  fecha_solicitud: string;
-  
   solicitante?: Usuario;
   unidad?: UnidadOrganizativa;
   vehiculo?: Vehiculo;
@@ -94,9 +94,7 @@ export interface ControlAccesoSeguridad {
   tipo_movimiento: 'salida_base' | 'entrada_base';
   fecha_hora: string;
   observaciones?: string;
-  seguridad?: {
-    nombre: string;
-  };
+  seguridad?: { nombre: string };
 }
 
 export interface AuthResponse {
@@ -108,7 +106,7 @@ export interface AuthResponse {
   error?: string;
 }
 
-// Deprecated (for backward compatibility during migration)
+/** @deprecated Modelo temporal durante migracion a Mision */
 export interface Asignacion {
   id_asignacion: number;
   id_motorista?: number;
@@ -117,10 +115,12 @@ export interface Asignacion {
   dia_semana: string;
   tipo_actividad: string;
   mision?: string;
-  hora_salida?: string;
-  estado: string;
+  objetivo_mision?: string;
+  hora_salida?: string | null;
+  estado: EstadoMision;
   unidad_solicitante?: string;
   destino?: string;
+  area_destino?: { nombre_area: string };
   kilometraje_retorno?: number;
   hoja_transporte_rnpn?: string;
   aplica_vales?: boolean;
