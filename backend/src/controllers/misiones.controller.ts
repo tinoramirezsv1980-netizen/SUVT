@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import prisma from '../prisma/client'
+import cloudinaryService from '../services/cloudinary.service'
 
 const mapFuelLevel = (fuel: any): any => {
   if (!fuel) return null
@@ -58,7 +59,17 @@ const mapTipoEvento = (evento: any): any => {
 // 1. Solicitud de Misión - Jefatura inicia el proceso
 export const create = async (req: Request, res: Response) => {
   try {
-    const { id_usuario_solicitante, id_unidad, objetivo_mision, persona_mision, destino, fecha_mision, hora_mision, descripcion_mision } = req.body
+    const {
+      id_usuario_solicitante,
+      id_unidad,
+      objetivo_mision,
+      persona_mision,
+      destino,
+      fecha_mision,
+      hora_mision,
+      descripcion_mision
+    } = req.body
+
     const mision = await prisma.mision.create({
       data: {
         id_usuario_solicitante: parseInt(id_usuario_solicitante),
@@ -72,6 +83,7 @@ export const create = async (req: Request, res: Response) => {
         estado_mision: 'solicitada'
       }
     })
+
     res.status(201).json({ ok: true, mision })
   } catch (error: any) {
     res.status(400).json({ ok: false, error: error.message })
@@ -82,8 +94,13 @@ export const create = async (req: Request, res: Response) => {
 export const assign = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
-    const { id_vehiculo, id_motorista, estado_mision, justificacion_cambio_vehiculo } = req.body // estado_mision puede ser 'aprobada' o 'rechazada'
-    
+    const {
+      id_vehiculo,
+      id_motorista,
+      estado_mision,
+      justificacion_cambio_vehiculo
+    } = req.body // estado_mision puede ser 'aprobada' o 'rechazada'
+
     const mision = await prisma.mision.update({
       where: { id_mision: parseInt(id) },
       data: {
@@ -93,6 +110,7 @@ export const assign = async (req: Request, res: Response) => {
         justificacion_cambio_vehiculo: justificacion_cambio_vehiculo || null
       }
     })
+
     res.json({ ok: true, mision })
   } catch (error: any) {
     res.status(400).json({ ok: false, error: error.message })
@@ -103,8 +121,13 @@ export const assign = async (req: Request, res: Response) => {
 // 7. Control de Entrada - Seguridad registra llegada a base
 export const registerAccess = async (req: Request, res: Response) => {
   try {
-    const { id_mision, id_usuario_seguridad, tipo_movimiento, observaciones } = req.body
-    
+    const {
+      id_mision,
+      id_usuario_seguridad,
+      tipo_movimiento,
+      observaciones
+    } = req.body
+
     console.log(`[Access] Mision: ${id_mision}, Tipo: ${tipo_movimiento}`);
 
     const control = await prisma.controlAccesoSeguridad.create({
@@ -133,12 +156,24 @@ export const registerAccess = async (req: Request, res: Response) => {
 // 4. Registro de Llegada / 5. Movimientos / 6. Registro de Retorno
 export const addMovement = async (req: Request, res: Response) => {
   try {
-    const { id_mision, tipo_evento, ubicacion, kilometraje_registro, nivel_combustible } = req.body
+    const {
+      id_mision,
+      tipo_evento,
+      ubicacion,
+      kilometraje_registro,
+      nivel_combustible
+    } = req.body
+
     const misionId = parseInt(id_mision)
-    
+
     // Asegurar que kilometraje_registro sea un número válido o null
     let km = null;
-    if (kilometraje_registro !== undefined && kilometraje_registro !== null && kilometraje_registro !== '') {
+
+    if (
+      kilometraje_registro !== undefined &&
+      kilometraje_registro !== null &&
+      kilometraje_registro !== ''
+    ) {
       km = parseInt(kilometraje_registro.toString());
       if (isNaN(km)) km = null;
     }
@@ -154,17 +189,23 @@ export const addMovement = async (req: Request, res: Response) => {
       })
     }
 
-    console.log(`[Movement] Mision: ${misionId}, Evento: ${cleanEvento}, KM: ${km}, Fuel: ${cleanFuel}`);
+    console.log(
+      `[Movement] Mision: ${misionId}, Evento: ${cleanEvento}, KM: ${km}, Fuel: ${cleanFuel}`
+    );
 
     // Registrar el movimiento y actualizar misión en una transacción atómica
     const log = await prisma.$transaction(async (tx) => {
+
       // 1. Si es salida de base, actualizar kilometraje_inicial en la tabla Mision
       if (cleanEvento === 'salida_base' && km !== null) {
         await tx.mision.update({
           where: { id_mision: misionId },
           data: { kilometraje_inicial: km }
         })
-        console.log(`[Movement] Kilometraje inicial actualizado en tabla Mision: ${km}`)
+
+        console.log(
+          `[Movement] Kilometraje inicial actualizado en tabla Mision: ${km}`
+        )
       }
 
       // 2. Registrar el movimiento en el log (siempre se guarda)
@@ -180,10 +221,16 @@ export const addMovement = async (req: Request, res: Response) => {
     })
 
     res.status(201).json({ ok: true, log })
+
   } catch (error: any) {
+
     // Mantener el error original para que no quede silencioso
     console.error('[Movement Error]', error);
-    res.status(400).json({ ok: false, error: error.message })
+
+    res.status(400).json({
+      ok: false,
+      error: error.message
+    })
   }
 
   /* eliminado bloque anidado incorrecto catch txError */
@@ -195,19 +242,27 @@ export const finalize = async (req: Request, res: Response) => {
     const { id } = req.params
     const { kilometraje_final, nivel_combustible } = req.body
     const misionId = parseInt(id)
-    
+
     let km = null;
-    if (kilometraje_final !== undefined && kilometraje_final !== null && kilometraje_final !== '') {
+
+    if (
+      kilometraje_final !== undefined &&
+      kilometraje_final !== null &&
+      kilometraje_final !== ''
+    ) {
       km = parseInt(kilometraje_final.toString());
       if (isNaN(km)) km = null;
     }
 
     const cleanFuel = mapFuelLevel(nivel_combustible);
 
-    console.log(`[Finalize] Mision: ${misionId}, KM Final: ${km}, Fuel: ${cleanFuel}`);
+    console.log(
+      `[Finalize] Mision: ${misionId}, KM Final: ${km}, Fuel: ${cleanFuel}`
+    );
 
     // Ejecutar todo el cierre en una transacción atómica
     await prisma.$transaction(async (tx) => {
+
       // 1. Obtener la misión para saber qué vehículo actualizar
       const misionActual = await tx.mision.findUnique({
         where: { id_mision: misionId },
@@ -216,7 +271,10 @@ export const finalize = async (req: Request, res: Response) => {
 
       // 2. Consolidar datos desde log_movimientos_mision y control_acceso_seguridad
       const logSalida = await tx.logMovimientoMision.findFirst({
-        where: { id_mision: misionId, tipo_evento: 'salida_base' },
+        where: {
+          id_mision: misionId,
+          tipo_evento: 'salida_base'
+        },
         orderBy: { fecha_hora: 'desc' }
       });
 
@@ -228,7 +286,7 @@ export const finalize = async (req: Request, res: Response) => {
       // 3. Actualizar tabla maestra Mision con datos consolidados
       await tx.mision.update({
         where: { id_mision: misionId },
-        data: { 
+        data: {
           estado_mision: 'finalizada',
           kilometraje_final: km,
           kilometraje_inicial: logSalida?.kilometraje_registro ?? undefined,
@@ -237,14 +295,21 @@ export const finalize = async (req: Request, res: Response) => {
       })
 
       // 4. Actualizar kilometraje actual del vehículo
-      if (misionActual?.id_vehiculo && km !== null && !isNaN(km)) {
+      if (
+        misionActual?.id_vehiculo &&
+        km !== null &&
+        !isNaN(km)
+      ) {
         await tx.vehiculo.update({
           where: { id_vehiculo: misionActual.id_vehiculo },
           data: { kilometraje_actual: km }
         });
-        console.log(`[Finalize] Kilometraje del vehículo ${misionActual.id_vehiculo} actualizado a ${km}`);
+
+        console.log(
+          `[Finalize] Kilometraje del vehículo ${misionActual.id_vehiculo} actualizado a ${km}`
+        );
       }
-      
+
       // 5. Registrar el evento de finalización en log para trazabilidad
       await tx.logMovimientoMision.create({
         data: {
@@ -258,9 +323,15 @@ export const finalize = async (req: Request, res: Response) => {
     })
 
     res.json({ ok: true })
+
   } catch (error: any) {
+
     console.error('[Finalize Error]', error);
-    res.status(400).json({ ok: false, error: error.message })
+
+    res.status(400).json({
+      ok: false,
+      error: error.message
+    })
   }
 }
 
@@ -277,9 +348,15 @@ export const getAll = async (_req: Request, res: Response) => {
       },
       orderBy: { fecha_solicitud: 'desc' }
     })
+
     res.json({ ok: true, misiones })
+
   } catch (error: any) {
-    res.status(400).json({ ok: false, error: error.message })
+
+    res.status(400).json({
+      ok: false,
+      error: error.message
+    })
   }
 }
 
@@ -287,17 +364,44 @@ export const getAll = async (_req: Request, res: Response) => {
 export const uploadDocument = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
+
     if (!req.file) {
-      return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo' })
+      return res.status(400).json({
+        ok: false,
+        error: 'No se recibió ningún archivo'
+      })
     }
 
+    // Subir directamente desde memoria a Cloudinary
+    const resultado = await cloudinaryService.uploadFile(
+      req.file.buffer,
+      'SUVT/Misiones'
+    )
+
+    // Guardar la URL pública del documento en la misión
     const mision = await prisma.mision.update({
       where: { id_mision: parseInt(id) },
-      data: { documento_respaldo: req.file.path }
+      data: {
+        documento_respaldo: resultado.secure_url
+      }
     })
 
-    res.json({ ok: true, mision })
+    res.json({
+      ok: true,
+      mision,
+      cloudinary: {
+        public_id: resultado.public_id,
+        resource_type: resultado.resource_type
+      }
+    })
+
   } catch (error: any) {
-    res.status(400).json({ ok: false, error: error.message })
+
+    console.error('[Upload Document Error]', error)
+
+    res.status(400).json({
+      ok: false,
+      error: error.message
+    })
   }
 }

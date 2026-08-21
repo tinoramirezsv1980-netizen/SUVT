@@ -259,7 +259,8 @@ export default function GestionMisiones() {
                     <div className="flex items-center justify-end gap-2">
                       {m.documento_respaldo && (
                         <a 
-                          href={`${(api.defaults.baseURL || '').split('/api')[0]}/${m.documento_respaldo.replace(/\\/g, '/')}`}
+                          href={m.documento_respaldo.startsWith('http')? m.documento_respaldo: `${(api.defaults.baseURL || '').split('/api')[0]}/${m.documento_respaldo.replace(/\\/g, '/')}`
+}
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="p-2 sm:p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-500 hover:text-white transition-all shadow-sm flex items-center justify-center"
