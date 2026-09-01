@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: rnpn-trazabilidad
+data:
+  NODE_ENV: "production"
+  PORT: "4000"
+  JWT_EXPIRES_IN: "8h"
+  CORS_ORIGIN: "https://trazabilidad.rnpn.gob.sv"
+  LOG_LEVEL: "info"
+  UMBRAL_KM_MANTENIMIENTO: "50000"
+  TZ: "America/El_Salvador"
