@@ -2,8 +2,11 @@
 .gitignore
 node_modules
 dist
+android
+capacitor.config.*
 .env
 .env.local
+.env.apk*
 *.md
 .DS_Store
 Thumbs.db
