@@ -86,6 +86,57 @@ CORS_ORIGIN=http://localhost:5173
 
 ---
 
+## Modo Docker (Fase 4 — Docker + Balanceador en Windows 11)
+
+Levanta **backend x3 + frontend x2 + balanceador Nginx** (todo por `http://localhost:8080`), apuntando al MySQL de XAMPP (Opción A).
+
+### Requisitos
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado y corriendo (motor en ejecución).
+- XAMPP con MySQL activo en el puerto 3306.
+- Base de datos `rnpn_vehiculos_nueva` creada (igual que en el modo local).
+
+### Uso
+
+```
+1. Abrir XAMPP            → Start MySQL
+2. Doble clic en docker-up.bat   → Construye y levanta todo, valida /health
+```
+
+O manualmente:
+
+```powershell
+# Desde la raíz del proyecto
+docker compose up --build -d --scale backend=3 --scale frontend=2
+```
+
+Al finalizar quedará disponible:
+
+| Servicio | URL |
+|---|---|
+| Frontend (SPA) | http://localhost:8080 |
+| API health | http://localhost:8080/health |
+| API (proxy) | http://localhost:8080/api/... |
+
+Para detener: doble clic en `docker-down.bat` o `docker compose down`.
+
+### Opción B — MySQL en Docker (alternativa)
+
+En lugar del XAMPP, se usa un contenedor MySQL 8 (puerto 3307):
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.mysql.yml up --build -d --scale backend=3 --scale frontend=2
+```
+
+### Notas técnicas
+
+- Las réplicas se balancean con Nginx (`lb/nginx.conf`) usando `least_conn`.
+- El backend usa Prisma con `binaryTargets = ["native", "debian-openssl-3.0.x"]` y la imagen `node:20-slim` (compatible con MySQL 8 y el motor de Prisma en Debian).
+- Config por entorno: copiar `.env.example` → `.env` (el script `docker-up.bat` crea `.env` y genera `JWT_SECRET` automáticamente).
+- Acceso desde otros dispositivos: usar la IP local de la PC seguida del puerto 8080, p. ej. `http://192.168.1.50:8080`.
+
+---
+
 ## Comandos útiles de Prisma
 
 ```powershell
