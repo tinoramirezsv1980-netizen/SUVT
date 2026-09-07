@@ -137,6 +137,46 @@ docker compose -f docker-compose.yml -f docker-compose.mysql.yml up --build -d -
 
 ---
 
+## Despliegue a la nube (GitHub → GHCR → Render)
+
+La primera aplicación (local) alimenta a la segunda (nube) mediante GitHub. El repositorio
+contiene un pipeline de CI/CD (``.github/workflows/deploy.yml`) que:
+
+1. **Construye** las imágenes Docker del backend y frontend.
+2. **Publica** ambas en **GitHub Container Registry (GHCR)** con tags `latest` y el SHA del commit.
+3. **Dispara el despliegue en Render** (backend + frontend) vía **Deploy Hooks**.
+
+### Secretos requeridos (Settings → Secrets and variables → Actions)
+
+| Secreto | Para qué |
+|---|---|
+| `RENDER_BACKEND_DEPLOY_HOOK` | Deploy Hook de Render del servicio Backend |
+| `RENDER_FRONTEND_DEPLOY_HOOK` | Deploy Hook de Render del servicio Frontend |
+
+No se requieren credenciales de contenedor: el pipeline usa `GITHUB_TOKEN` para publicar en GHCR.
+
+### Cómo obtener los Deploy Hooks en Render
+
+1. En Render, ir al servicio (Backend o Frontend).
+2. Menú **Settings** → sección **Deploy Hooks** → **Create Deploy Hook**.
+3. Copiar la URL generada en el secreto correspondiente de GitHub.
+
+### Cómo usar una imagen de GHCR en un servicio de Render
+
+Para que Render use la imagen publicada (en lugar de build desde el código):
+
+- Crear un servicio tipo **Web Service / Docker**.
+- Como fuente de imagen usar (en minúsculas):
+  - Backend: `ghcr.io/<usuario>/<repo>/suvt-backend:latest`
+  - Frontend: `ghcr.io/<usuario>/<repo>/suvt-frontend:latest`
+- En el proveedor de contenedores, autorizar que Render acceda al GHCR (Tokens GHCR o conexión a GitHub con permiso de `packages: read`).
+
+> Nota: mientras tanto, la nube ya funciona con el pipeline nativo de Render desde GitHub
+> (build del repo). Este workflow agrega la variante de imágenes Docker y el disparo de
+> despliegue, según el `ROADMAP_SUVT.md` (Fase 4).
+
+---
+
 ## Comandos útiles de Prisma
 
 ```powershell
