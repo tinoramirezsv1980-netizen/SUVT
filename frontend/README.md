@@ -1,73 +1,98 @@
-# React + TypeScript + Vite
+# RNPN Trazabilidad — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema de trazabilidad vehicular del RNPN. Aplicación React + Vite + TypeScript + Tailwind.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19 + Vite 8 + TypeScript
+- Tailwind CSS 4
+- Axios (API `/api`)
+- Capacitor (app Android)
 
-## React Compiler
+## Uso en desarrollo
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+npm install
+npm run dev      # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+La URL de la API se define con `VITE_API_URL` (ver `.env`). Por defecto `http://localhost:4000/api`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Build (web)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+npm run build    # genera dist/
 ```
+
+## Fase 3 — App Android (Capacitor)
+
+La misma SPA se empaqueta como APK con Capacitor. El frontend ya es responsive y táctil
+(ver `ROADMAP_SUVT.md`, Fase 2 y Fase 3).
+
+### Primera vez
+
+```powershell
+npm install                       # instala @capacitor/core, @capacitor/android, @capacitor/cli
+npx cap add android               # ya hecho: genera la carpeta android/
+```
+
+Configuración en `capacitor.config.ts`:
+
+| Clave | Valor |
+|---|---|
+| `appId` | `sv.gob.rnpn.suvt` |
+| `appName` | `RNPN Trazabilidad` |
+| `webDir` | `dist` |
+| `server.androidScheme` | `https` (contenido local servido por HTTPS en la WebView) |
+| `usesCleartextTraffic` | `true` en manifest (permite HTTP a la API local en pruebas) |
+
+### Build del APK
+
+1. Definir a qué API apuntará la app.
+
+   **Producción (nube):**
+   ```powershell
+   $env:VITE_API_URL="https://trazabilidad.rnpn.gob.sv/api"
+   npm run build:apk
+   ```
+   Si aún no hay dominio, usar la URL de Render del backend.
+
+   **Pruebas en la misma red local:**
+   ```powershell
+   $env:VITE_API_URL="http://192.168.x.x:8080/api"
+   npm run build:apk
+   ```
+   > No usar `localhost`: el celular no lo resuelve. Usar la IP local de la PC.
+
+2. Compilar el APK. Requiere **Android Studio** (SDK + JDK 17):
+
+   ```powershell
+   cd android
+   .\gradlew.bat assembleDebug
+   # APK generado en:
+   # android\app\build\outputs\apk\debug\app-debug.apk
+   ```
+
+   O abrir el proyecto en Android Studio: `npm run cap:open` → Run.
+
+### Sincronizar la web al proyecto nativo
+
+```powershell
+npm run cap:sync    # build + cap sync android
+```
+
+### Iconos y splash (opcional)
+
+Para generar iconos y splash a partir de una imagen origen:
+
+```powershell
+npx @capacitor/assets generate --android
+```
+
+Colocar la imagen fuente en `assets/icon-only.png` (1024×1024) y `assets/splash.png`
+(2732×2732) antes de generarlos.
+
+## Notas
+
+- El APK usa `localStorage` para el JWT (igual que la web). Sin cookies de sesión.
+- En producción se recomienda remover `usesCleartextTraffic` (o limitarlo) una vez que la API sea solo HTTPS.
