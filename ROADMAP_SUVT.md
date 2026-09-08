@@ -1,7 +1,7 @@
 # Roadmap de Evolución del SUVT
 
 **Sistema Unificado de Vehículos y Transporte (SUVT)**  
-**Estado del roadmap:** Fase 1 completada y validada en producción  
+**Estado del roadmap:** Fase 1-4 Win11 completadas, Fase 3 APK parcial  
 **Fecha:** Septiembre 2026
 
 ---
@@ -88,9 +88,9 @@ Render
 
 # FASE 2 — RESPONSIVE Y EXPERIENCIA MÓVIL
 
-## Estado: SIGUIENTE FASE
+## Estado: COMPLETADA
 
-Esta fase tiene como objetivo adaptar la misma aplicación React para funcionar correctamente en:
+Esta fase adaptó la misma aplicación React para funcionar correctamente en:
 
 - Computadoras de escritorio.
 - Laptops.
@@ -360,7 +360,7 @@ Swipe
 
 # FASE 3 — EMPAQUETADO MÓVIL Y APK ANDROID
 
-## Estado: PLANIFICADA
+## Estado: EN PROGRESO (Capacitor integrado, APK requiere Android Studio)
 
 Una vez completada la adaptación responsive, la misma aplicación React será preparada para Android.
 
@@ -474,7 +474,7 @@ Misma Base de Datos
 
 # FASE 4 — DOCKER, CONTENEDORES Y BALANCEO DE CARGA
 
-## Estado: PLANIFICADA
+## Estado: COMPLETADA (Windows 11 + CI/CD GitHub Actions)
 
 La Fase 4 busca preparar la infraestructura para una operación más portable y escalable.
 
@@ -843,28 +843,29 @@ Kubernetes
 | Fase | Objetivo | Estado |
 |---|---|---|
 | Fase 1 | Sistema Web + Producción | COMPLETADA |
-| Fase 2 | Responsive Desktop / Tablet / Mobile | SIGUIENTE |
-| Fase 3 | Capacitor + Android APK | PLANIFICADA |
-| Fase 4 | Docker + Load Balancer | PLANIFICADA |
+| Fase 2 | Responsive Desktop / Tablet / Mobile | COMPLETADA |
+| Fase 3 | Capacitor + Android APK | EN PROGRESO (integración lista, APK pendiente) |
+| Fase 4 | Docker + Load Balancer | COMPLETADA (Win11 + CI/CD) |
 | Fase 5 | Kubernetes + Alta Disponibilidad | OPCIONAL |
 
 ---
 
 # PRÓXIMO PASO
 
-## Iniciar Fase 2 — Auditoría Responsive
+## Completar Fase 3 — Generación del APK Android
 
-Antes de modificar código se realizará una auditoría técnica del frontend para identificar:
+La integración con Capacitor ya está lista (proyecto `frontend/android/` generado, `cap sync` funcional). Para generar el APK se necesita:
 
-1. Framework CSS actual.
-2. Layout principal.
-3. Sidebar y navegación.
-4. Componentes globales.
-5. Tablas.
-6. Formularios.
-7. Modales.
-8. Breakpoints existentes.
-9. Páginas prioritarias.
-10. Estrategia de adaptación móvil.
+1. Instalar Android Studio (o Command Line Tools + SDK) en la máquina.
+2. Configurar `ANDROID_HOME`.
+3. Establecer `VITE_API_URL` (ver `frontend/.env.apk.example`).
+4. Ejecutar `npm run build` y `npx cap sync android` en `frontend/`.
+5. Generar el APK depurable con `npx cap open android` (Build > Build App Bundle(s) / APK(s)) o Gradle.
+
+## Desplegar en la nube (Fase 4 nube)
+
+1. Configurar Render Deploy Hooks (Backend y Frontend).
+2. Agregar `RENDER_BACKEND_DEPLOY_HOOK` y `RENDER_FRONTEND_DEPLOY_HOOK` como secrets en GitHub.
+3. Hacer merge de `desarrollo` a `main` para disparar disponibilidad en Producción.
 
 **Regla de trabajo:** primero auditar y planificar; después modificar, probar localmente, validar y finalmente hacer commit y despliegue.

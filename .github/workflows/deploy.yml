@@ -1,4 +1,4 @@
-name: Build, Publicar y Desplegar
+name: build-and-deploy
 
 on:
   push:
@@ -7,8 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BACKEND: ghcr.io/${{ lower(github.repository) }}/suvt-backend
-  IMAGE_FRONTEND: ghcr.io/${{ lower(github.repository) }}/suvt-frontend
 
 jobs:
   build-and-push:
@@ -20,26 +18,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login a GHCR
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Metadata Backend
+      - name: Backend metadata
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_BACKEND }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/suvt-backend
           tags: |
             type=raw,value=latest
             type=sha
 
-      - name: Build y Push Backend
+      - name: Build and push backend
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -49,18 +47,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Metadata Frontend
+      - name: Frontend metadata
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_FRONTEND }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/suvt-frontend
           tags: |
             type=raw,value=latest
             type=sha
-          # La URL de la API se resuelve via nginx proxy reverso (/api)
-          # Cuando se despliegue con Render Blueprint se puede sobreescribir aquí.
 
-      - name: Build y Push Frontend
+      - name: Build and push frontend
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
@@ -76,12 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Desplegar Backend en Render
-        run: |
-          curl -f -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
-        shell: bash
+      - name: Deploy backend
+        run: curl -f -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
 
-      - name: Desplegar Frontend en Render
-        run: |
-          curl -f -X POST "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}"
-        shell: bash
+      - name: Deploy frontend
+        run: curl -f -X POST "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}"
