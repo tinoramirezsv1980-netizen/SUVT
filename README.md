@@ -144,7 +144,22 @@ contiene un pipeline de CI/CD (``.github/workflows/deploy.yml`) que:
 
 1. **Construye** las imágenes Docker del backend y frontend.
 2. **Publica** ambas en **GitHub Container Registry (GHCR)** con tags `latest` y el SHA del commit.
-3. **Dispara el despliegue en Render** (backend + frontend) vía **Deploy Hooks**.
+3. **Compila el APK Android** en un runner Linux con SDK y lo sube como artefacto descargable.
+4. **Dispara el despliegue en Render** (backend + frontend) vía **Deploy Hooks** (solo en `main`).
+
+### Eventos que disparan el pipeline
+
+| Evento | Jobs que corren |
+|---|---|
+| Push a `main` | build-and-push + build-apk + deploy-render |
+| Push a `desarrollo` | build-and-push + build-apk |
+| Pull request hacia `main` | build-apk (check de validación) |
+| `workflow_dispatch` (manual) | Todos los que apliquen según la rama |
+
+### Protección de rama recomendada (Settings → Branches → Add rule → `main`)
+
+- Require a status check: **build-apk** (y `build-and-push` si se desea).
+- Manejar el merge por **Pull Request** (no push directo a `main`).
 
 ### Secretos requeridos (Settings → Secrets and variables → Actions)
 
@@ -153,13 +168,33 @@ contiene un pipeline de CI/CD (``.github/workflows/deploy.yml`) que:
 | `RENDER_BACKEND_DEPLOY_HOOK` | Deploy Hook de Render del servicio Backend |
 | `RENDER_FRONTEND_DEPLOY_HOOK` | Deploy Hook de Render del servicio Frontend |
 
+Variable de repositorio opcional (Settings → Secrets and variables → Actions → Variables):
+
+| Variable | Para qué |
+|---|---|
+| `APK_API_URL` | URL de la API usada al compilar el APK en CI. Default: `https://trazabilidad.rnpn.gob.sv/api` |
+
 No se requieren credenciales de contenedor: el pipeline usa `GITHUB_TOKEN` para publicar en GHCR.
 
 ### Cómo obtener los Deploy Hooks en Render
 
-1. En Render, ir al servicio (Backend o Frontend).
-2. Menú **Settings** → sección **Deploy Hooks** → **Create Deploy Hook**.
-3. Copiar la URL generada en el secreto correspondiente de GitHub.
+1. Iniciar sesión en [Render](https://dashboard.render.com).
+2. Ir al servicio **Backend** (`suvt-backend`) → pestaña **Settings**.
+3. Sección **Deploy Hooks** → **Create Deploy Hook** → darle un nombre (p. ej. `github-ci-backend`).
+4. Copiar la URL generada.
+5. Repetir igual con el servicio **Frontend**.
+6. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**:
+   - `RENDER_BACKEND_DEPLOY_HOOK` = URL del hook de Backend.
+   - `RENDER_FRONTEND_DEPLOY_HOOK` = URL del hook de Frontend.
+7. Opcional: en Render, desmarcar **Auto-Deploy** si se quiere que Render espere el hook
+   (así sólo despliega cuando lo dispara el CI, tras publicar la imagen en GHCR).
+
+### Descargar el APK compilado por el CI
+
+1. Abrir la pestaña **Actions** del repositorio.
+2. Seleccionar el run más reciente del workflow `build-and-deploy`.
+3. Al final de la página, en **Artifacts**, descargar `suvt-app-debug`.
+4. El APK está en esa carpeta: `app-debug.apk`.
 
 ### Cómo usar una imagen de GHCR en un servicio de Render
 
@@ -174,6 +209,47 @@ Para que Render use la imagen publicada (en lugar de build desde el código):
 > Nota: mientras tanto, la nube ya funciona con el pipeline nativo de Render desde GitHub
 > (build del repo). Este workflow agrega la variante de imágenes Docker y el disparo de
 > despliegue, según el `ROADMAP_SUVT.md` (Fase 4).
+
+---
+
+## App Android (Fase 3 — Capacitor + APK)
+
+El frontend empaqueta la misma SPA en Android mediante Capacitor.
+
+### Requisitos
+
+- **Android Studio** instalado (incluye el JDK interno `jbr`, versión 25, compatible con AGP 8.13).
+- **Java 21 o superior** disponible. Si tu JDK es 17, el build fallará con
+  `invalid source release: 21`; usa el JBR de Android Studio:
+  `C:\Program Files\Android\Android Studio\jbr`.
+
+### Compilar el APK localmente (Windows)
+
+```powershell
+# Desde frontend/
+# 1. Definir a qué API apuntará el APK (producción por defecto)
+$env:VITE_API_URL = "https://trazabilidad.rnpn.gob.sv/api"
+
+# 2. Construir la SPA y sincronizar con el proyecto Android
+npm run build
+npx cap sync android
+
+# 3. Compilar el APK depurable
+#    (el JBR de Android Studio es JDK 25: compatible)
+cd android
+.\gradlew.bat assembleDebug
+```
+
+El APK queda en `frontend/android/app/build/outputs/apk/debug/app-debug.apk`.
+
+> En el CI, el job `build-apk` hace exactamente este proceso en un runner Linux
+> y sube el APK como artefacto (ver sección de despliegue a la nube).
+
+### Variables para el APK
+
+| Variable | Uso |
+|---|---|
+| `VITE_API_URL` | URL base de la API embebida en el APK. Ver `frontend/.env.apk.example`. |
 
 ---
 
