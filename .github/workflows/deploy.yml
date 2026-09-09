@@ -127,11 +127,14 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: [build-and-push, build-apk]
     runs-on: ubuntu-latest
+    env:
+      RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+      RENDER_FRONTEND_DEPLOY_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
     steps:
       - name: Deploy backend
-        if: secrets.RENDER_BACKEND_DEPLOY_HOOK != ''
-        run: curl -f -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
+        if: env.RENDER_BACKEND_DEPLOY_HOOK != ''
+        run: curl -f -X POST "${{ env.RENDER_BACKEND_DEPLOY_HOOK }}"
 
       - name: Deploy frontend
-        if: secrets.RENDER_FRONTEND_DEPLOY_HOOK != ''
-        run: curl -f -X POST "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}"
+        if: env.RENDER_FRONTEND_DEPLOY_HOOK != ''
+        run: curl -f -X POST "${{ env.RENDER_FRONTEND_DEPLOY_HOOK }}"
