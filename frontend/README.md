@@ -44,7 +44,7 @@ Configuración en `capacitor.config.ts`:
 | `appName` | `RNPN Trazabilidad` |
 | `webDir` | `dist` |
 | `server.androidScheme` | `https` (contenido local servido por HTTPS en la WebView) |
-| `usesCleartextTraffic` | `true` en manifest (permite HTTP a la API local en pruebas) |
+| `usesCleartextTraffic` | eliminado en manifest (HTTPS forzado; solo permitido para pruebas locales vía variable) |
 
 ### Build del APK
 
@@ -52,10 +52,10 @@ Configuración en `capacitor.config.ts`:
 
    **Producción (nube):**
    ```powershell
-   $env:VITE_API_URL="https://trazabilidad.rnpn.gob.sv/api"
+   $env:VITE_API_URL="https://suvt-backend.onrender.com/api"
    npm run build:apk
    ```
-   Si aún no hay dominio, usar la URL de Render del backend.
+   El CI usa la variable `APK_API_URL` de GitHub (default: `suvt-backend.onrender.com`).
 
    **Pruebas en la misma red local:**
    ```powershell
@@ -64,7 +64,7 @@ Configuración en `capacitor.config.ts`:
    ```
    > No usar `localhost`: el celular no lo resuelve. Usar la IP local de la PC.
 
-2. Compilar el APK. Requiere **Android Studio** (SDK + JDK 17):
+2. Compilar el APK. Requiere **Android Studio** (SDK + **JDK 21+**; el JDK 17 falla con Capacitor 8/AGP 8.13):
 
    ```powershell
    cd android
