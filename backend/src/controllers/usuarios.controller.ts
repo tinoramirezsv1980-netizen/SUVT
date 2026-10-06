@@ -87,7 +87,17 @@ export const update = async (req: Request, res: Response) => {
       }
     })
 
-    res.json({ ok: true, usuario })
+    res.json({
+      ok: true,
+      usuario: {
+        id_usuario: usuario.id_usuario,
+        nombre: usuario.nombre,
+        correo: usuario.correo,
+        rol: usuario.rol,
+        activo: usuario.activo,
+        id_motorista: usuario.id_motorista
+      }
+    })
   } catch (error: any) {
     console.error('Error al actualizar usuario:', error)
     res.status(500).json({ ok: false, error: error.message || 'Error al actualizar usuario' })

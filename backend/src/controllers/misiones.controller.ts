@@ -339,7 +339,7 @@ export const getAll = async (_req: Request, res: Response) => {
   try {
     const misiones = await prisma.mision.findMany({
       include: {
-        solicitante: true,
+        solicitante: { select: { id_usuario: true, nombre: true, correo: true } },
         unidad: true,
         vehiculo: true,
         motorista: true,
