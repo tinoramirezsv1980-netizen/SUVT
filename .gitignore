@@ -27,6 +27,9 @@ npm-debug.log*
 *_backup.sql
 *_full_backup.sql
 
+# Volcados de datos locales: contienen hashes bcrypt y correos reales
+database/_*.sql
+
 # IDE
 .vscode/
 .idea/
@@ -40,6 +43,11 @@ Desktop.ini
 *.tmp
 *.cache
 coverage/
+
+# Scripts auxiliares de generacion de documentos
+generar_exp.py
+md2pdf.py
+__pycache__/
 
 # Deploy
 .vercel/
