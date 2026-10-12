@@ -578,7 +578,7 @@ export const uploadDocument = async (req: Request, res: Response) => {
     // 1. Subir el nuevo. Si esto falla, se conserva el anterior.
     const resultado = await cloudinaryService.uploadFile(
       req.file.buffer,
-      'SUVT/Misiones'
+      process.env.CLOUDINARY_FOLDER || 'SUVT/Misiones'
     )
 
     // 2. Guardar la URL pública del documento en la misión
