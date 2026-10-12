@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Permite acceso desde otros equipos en la red
-    port: 5173
+    port: 5174,
+    strictPort: true
   }
 })

@@ -1,11 +1,23 @@
 @echo off
 REM ============================================================
 REM  SUVT - Arranque Docker en Windows 11 (Opcion A: XAMPP)
-REM  Levanta backend x3 + frontend x2 + balanceador (puerto 8080)
+REM  Levanta backend x3 + frontend x2 + balanceador (puerto leido de .env)
 REM ============================================================
 setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
+
+REM --- Leer HTTP_PORT del .env raiz (default 8080) ---
+set "HTTP_PORT=8080"
+for /f "tokens=1,* delims==" %%a in ('findstr /B /C:"HTTP_PORT=" .env 2^>nul') do set "HTTP_PORT=%%b"
+if "!HTTP_PORT!"=="" set "HTTP_PORT=8080"
+
+REM --- Avisar si el puerto ya esta ocupado (puede ser otro stack) ---
+netstat -an | findstr /C:":!HTTP_PORT!" | findstr "LISTENING" >nul
+if not errorlevel 1 (
+    echo [AVISO] El puerto !HTTP_PORT! ya esta en uso.
+    echo         Puede pertenecer a otro stack. Revisa: docker compose ls
+)
 
 echo.
 echo ============================================
@@ -61,10 +73,10 @@ if errorlevel 1 (
 
 REM --- 5. Esperar health del balanceador ---
 echo.
-echo [INFO] Esperando health check en http://localhost:8080/health ...
+echo [INFO] Esperando health check en http://localhost:!HTTP_PORT!/health ...
 set "ready="
 for /L %%i in (1,1,24) do (
-    for /f "delims=" %%r in ('powershell -NoProfile -Command "try { (Invoke-WebRequest -Uri http://localhost:8080/health -UseBasicParsing -TimeoutSec 5).Content } catch { '' }"') do set "resp=%%r"
+    for /f "delims=" %%r in ('powershell -NoProfile -Command "try { (Invoke-WebRequest -Uri http://localhost:!HTTP_PORT!/health -UseBasicParsing -TimeoutSec 5).Content } catch { '' }"') do set "resp=%%r"
     echo "!resp!" | findstr /C:"ok" >nul 2>&1
     if not errorlevel 1 (
         set "ready=1"
@@ -84,10 +96,13 @@ if defined ready (
 echo.
 echo ============================================
 echo  Aplicacion lista!
-echo   Frontend  : http://localhost:8080
-echo   API health: http://localhost:8080/health
+echo   Frontend  : http://localhost:!HTTP_PORT!
+echo   API health: http://localhost:!HTTP_PORT!/health
 echo ============================================
 echo.
 echo  Para detener:  docker compose down
+echo.
+echo  Stacks activos en este equipo:
+docker compose ls
 echo.
 pause
