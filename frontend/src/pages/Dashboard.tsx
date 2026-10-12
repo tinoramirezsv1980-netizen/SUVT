@@ -109,6 +109,17 @@ export default function Dashboard() {
 
   //const googlePalette = ['#4285F4', '#34A853', '#FBBC05', '#EA4335'];
 
+  const resumenDestinos = (m: Mision) => {
+    const nombres = (m.destinos ?? [])
+      .slice()
+      .sort((a, b) => a.orden_visita - b.orden_visita)
+      .map(d => d.nombre_destino)
+      .filter(Boolean);
+    return nombres.length > 0 ? nombres.join(' → ') : (m.destino || 'Sede Central');
+  };
+
+  const totalDestinos = (m: Mision) => (m.destinos?.length || (m.destino ? 1 : 0));
+
   const stats = [
     { label: 'Vehículos Totales', value: vehiculos.length, icon: Car, color: 'text-[#4285F4]', bg: 'bg-blue-50' },
     { label: 'En Mantenimiento', value: vehiculos.filter(v => v.estado === 'mantenimiento').length, icon: AlertCircle, color: 'text-[#EA4335]', bg: 'bg-red-50' },
@@ -227,8 +238,13 @@ export default function Dashboard() {
                       <p className="text-[10px] text-gray-400">{new Date(m.fecha_solicitud).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                     </td>
                     <td className="py-5">
-                      <p className="text-sm font-black text-navy-900">{m.destino || 'Sin Destino'}</p>
-                      <p className="text-xs text-gray-400 truncate max-w-[200px]">{m.mision}</p>
+                      <p className="text-sm font-black text-navy-900">{resumenDestinos(m)}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-gray-400 truncate max-w-[200px]">{m.objetivo_mision || m.descripcion_mision}</p>
+                        {m.es_emergencia && (
+                          <span className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase bg-red-100 text-red-600 shrink-0">Emergencia</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-5">
                       {m.motorista ? (
@@ -247,13 +263,13 @@ export default function Dashboard() {
                     </td>
                     <td className="py-5">
                       <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase ${
-                        m.estado === 'aprobada' ? 'bg-blue-50 text-blue-600' :
-                        m.estado === 'en_curso' ? 'bg-amber-50 text-amber-600' :
-                        m.estado === 'finalizada' ? 'bg-emerald-50 text-emerald-600' :
-                        m.estado === 'rechazada' ? 'bg-red-50 text-red-600' :
+                        m.estado_mision === 'aprobada' ? 'bg-blue-50 text-blue-600' :
+                        m.estado_mision === 'en_curso' ? 'bg-amber-50 text-amber-600' :
+                        m.estado_mision === 'finalizada' ? 'bg-emerald-50 text-emerald-600' :
+                        m.estado_mision === 'rechazada' ? 'bg-red-50 text-red-600' :
                         'bg-gray-100 text-gray-500'
                       }`}>
-                        {m.estado}
+                        {m.estado_mision}
                       </span>
                     </td>
                     <td className="py-5 pr-4">
@@ -317,12 +333,16 @@ export default function Dashboard() {
                           <p className={`text-[10px] font-bold uppercase tracking-tight ${style.text}`}>{asig.objetivo_mision}</p>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-black text-[#1a73e8]">#M-{asig.id_mision}</span>
-                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${asig.estado_mision === 'aprobada' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                          {asig.estado_mision}
-                        </span>
-                        {asig.hora_mision && (
+                       <div className="flex flex-col items-end gap-1">
+                         <span className="text-[10px] font-black text-[#1a73e8]">#M-{asig.id_mision}</span>
+                         <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${asig.estado_mision === 'aprobada' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                           {asig.estado_mision}
+                         </span>
+                         {asig.es_emergencia && (
+                           <span className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase bg-red-100 text-red-600">Emergencia</span>
+                         )}
+                         {asig.hora_mision && (
+
                           <span className={`text-[10px] font-black ${style.text} flex items-center gap-1`}>
                             <Clock size={12} />
                             {asig.hora_mision}
@@ -337,7 +357,10 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
                       <MapPin size={14} className="text-emerald-500 opacity-60" />
-                      <span>{asig.destino || 'Sede Central'}</span>
+                      <span className="truncate max-w-[220px]">{resumenDestinos(asig)}</span>
+                      {totalDestinos(asig) > 1 && (
+                        <span className="text-[9px] font-black text-gray-400 uppercase">({totalDestinos(asig)} destinos)</span>
+                      )}
                     </div>
                   </div>
                   </div>

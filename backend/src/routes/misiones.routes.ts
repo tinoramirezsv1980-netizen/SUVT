@@ -15,6 +15,8 @@ router.patch('/:id/assign', permitirSoloAdmin, misionesCtrl.assign)
 router.post('/access', misionesCtrl.registerAccess)
 router.post('/movement', misionesCtrl.addMovement)
 router.patch('/:id/finalize', misionesCtrl.finalize)
+router.patch('/:id/destinos', permitirSoloAdmin, misionesCtrl.addDestino)
 router.patch('/:id/upload', uploadMisionDoc.single('documento'), misionesCtrl.uploadDocument)
+router.delete('/:id/documento', permitirSoloAdmin, misionesCtrl.deleteDocument)
 
 export default router

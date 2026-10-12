@@ -4,25 +4,35 @@ import {
   Plus, 
   Search, 
   FileText, 
-  //Clock, 
-  //CheckCircle2, 
   XCircle, 
   Loader2,
   Send,
-  Printer
+  Printer,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../contexts/AuthContext';
-import type { Mision, UnidadOrganizativa } from '../types';
+import type { Mision, UnidadOrganizativa, AreaDestino } from '../types';
 import { generateMisionPDF } from '../utils/pdfGenerator';
+
+interface DestinoForm {
+  nombre_destino: string;
+  id_area_destino: number | null;
+}
+
+const DESTINO_VACIO: DestinoForm = { nombre_destino: '', id_area_destino: null };
 
 export default function MisionesJefatura() {
   const { user } = useAuth();
   const [misiones, setMisiones] = useState<Mision[]>([]);
   const [unidades, setUnidades] = useState<UnidadOrganizativa[]>([]);
+  const [areas, setAreas] = useState<AreaDestino[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [destinos, setDestinos] = useState<DestinoForm[]>([{ ...DESTINO_VACIO }]);
+  const [esEmergencia, setEsEmergencia] = useState(false);
   const [searchParams] = useSearchParams();
   const misionRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
@@ -30,9 +40,10 @@ export default function MisionesJefatura() {
     if (!user?.id) return;
     try {
       setLoading(true);
-      const [respMis, respUni] = await Promise.all([
+      const [respMis, respUni, respAreas] = await Promise.all([
         api.get('misiones'),
-        api.get('unidades')
+        api.get('unidades'),
+        api.get('areas')
       ]);
       
       if (respMis.data.ok) {
@@ -42,6 +53,10 @@ export default function MisionesJefatura() {
       
       if (respUni.data.ok) {
         setUnidades(respUni.data.unidades);
+      }
+
+      if (respAreas.data.ok) {
+        setAreas(respAreas.data.areas);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -68,21 +83,57 @@ export default function MisionesJefatura() {
     }
   }, [searchParams, misiones]);
 
+  const resetForm = () => {
+    setDestinos([{ ...DESTINO_VACIO }]);
+    setEsEmergencia(false);
+  };
+
+  const handleDestinoChange = (index: number, valor: string) => {
+    const area = areas.find(a => a.nombre_area.toLowerCase() === valor.trim().toLowerCase());
+    setDestinos(prev => prev.map((d, i) => i === index
+      ? { nombre_destino: valor, id_area_destino: area?.id_area ?? null }
+      : d
+    ));
+  };
+
+  const addDestino = () => setDestinos(prev => [...prev, { ...DESTINO_VACIO }]);
+
+  const removeDestino = (index: number) => setDestinos(prev =>
+    prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)
+  );
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user?.id) {
       alert('Error: No se ha detectado el usuario. Por favor, inicie sesión de nuevo.');
       return;
     }
+
+    const destinosLimpios = destinos
+      .map(d => ({ ...d, nombre_destino: d.nombre_destino.trim() }))
+      .filter(d => d.nombre_destino.length > 0);
+
+    if (destinosLimpios.length === 0) {
+      alert('Debe indicar al menos un destino');
+      return;
+    }
+
     setIsSubmitting(true);
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     
     const data = {
       id_usuario_solicitante: user?.id,
       id_unidad: parseInt(formData.get('id_unidad') as string),
       objetivo_mision: formData.get('objetivo_mision'),
       persona_mision: formData.get('persona_mision'),
-      destino: formData.get('destino'),
+      destino: destinosLimpios[0].nombre_destino,
+      destinos: destinosLimpios.map((d, i) => ({
+        nombre_destino: d.nombre_destino,
+        id_area_destino: d.id_area_destino,
+        orden_visita: i + 1
+      })),
+      es_emergencia: esEmergencia,
       fecha_mision: formData.get('fecha_mision') ? new Date(formData.get('fecha_mision') as string).toISOString() : null,
       hora_mision: formData.get('hora_mision'),
       descripcion_mision: formData.get('descripcion_mision') || ''
@@ -93,6 +144,7 @@ export default function MisionesJefatura() {
       await api.post('misiones', data);
       fetchData();
       setIsModalOpen(false);
+      resetForm();
     } catch (error) {
       console.error('Error creating mission:', error);
       alert('Error al crear la solicitud de misión');
@@ -101,6 +153,14 @@ export default function MisionesJefatura() {
     }
   };
 
+  const listarDestinos = (m: Mision) => {
+    const nombres = (m.destinos ?? [])
+      .slice()
+      .sort((a, b) => a.orden_visita - b.orden_visita)
+      .map(d => d.nombre_destino)
+      .filter(Boolean);
+    return nombres.length > 0 ? nombres : (m.destino ? [m.destino] : []);
+  };
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
@@ -150,7 +210,7 @@ export default function MisionesJefatura() {
             <thead>
               <tr className="bg-gray-50/50">
                 <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">ID / Fecha</th>
-                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Unidad / Destino</th>
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Unidad / Destinos</th>
                 <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Objetivo</th>
                 <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Estado</th>
                 <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Acciones</th>
@@ -184,7 +244,12 @@ export default function MisionesJefatura() {
                   <td className="p-6">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-gray-700">{m.unidad?.nombre_unidad || 'N/A'}</span>
-                      <span className="text-[10px] text-gray-400 font-bold italic">{m.destino || 'Sin destino'}</span>
+                      <span className="text-[10px] text-gray-400 font-bold italic">
+                        {listarDestinos(m).length > 0 ? listarDestinos(m).join(' → ') : 'Sin destino'}
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-black uppercase mt-1">
+                        {listarDestinos(m).length} {listarDestinos(m).length === 1 ? 'destino' : 'destinos'}
+                      </span>
                     </div>
                   </td>
                   <td className="p-6">
@@ -192,7 +257,14 @@ export default function MisionesJefatura() {
                     <p className="text-[10px] text-gray-500 font-medium line-clamp-2 mt-1">{m.persona_mision || m.descripcion_mision}</p>
                   </td>
                   <td className="p-6">
-                    {getStatusBadge(m.estado_mision)}
+                    <div className="flex flex-col gap-2 items-start">
+                      {getStatusBadge(m.estado_mision)}
+                      {m.es_emergencia && (
+                        <span className="flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-700 border border-red-200">
+                          <AlertTriangle size={12} /> Emergencia
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-6 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -211,13 +283,15 @@ export default function MisionesJefatura() {
                           const obsSeguridad = m.controles_acceso?.map(c => 
                             `- ${c.tipo_movimiento === 'salida_base' ? 'SALIDA' : 'REGRESO'}: ${c.observaciones || 'Sin novedad'}`
                           ).join('\n') || 'No hay registros de seguridad';
+                          const ruta = listarDestinos(m).map((d, i) => `  ${i + 1}. ${d}`).join('\n') || 'N/A';
 
                           alert(
                             `Detalles de Misión #M-${m.id_mision}\n` +
                             `----------------------------------\n` +
                             `Objetivo: ${m.objetivo_mision || 'N/A'}\n` +
                             `Descripción: ${m.persona_mision || m.descripcion_mision || 'N/A'}\n` +
-                            `Destino: ${m.destino || 'N/A'}\n` +
+                            `Destinos:\n${ruta}\n` +
+                            `Emergencia: ${m.es_emergencia ? 'SÍ' : 'No'}\n` +
                             `Fecha: ${m.fecha_mision ? new Date(m.fecha_mision).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : 'N/A'}\n\n` +
                             `INFORMACIÓN TÉCNICA:\n` +
                             `KM Inicial: ${kmIni} KM\n` +
@@ -242,7 +316,7 @@ export default function MisionesJefatura() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col">
             <header className="p-8 pb-4 flex justify-between items-center border-b border-gray-50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-[#1a73e8]/10 flex items-center justify-center">
@@ -250,12 +324,12 @@ export default function MisionesJefatura() {
                 </div>
                 <h2 className="text-2xl font-black text-[#1a73e8]">Nueva Solicitud</h2>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-2xl transition-colors text-gray-400">
+              <button onClick={() => { setIsModalOpen(false); resetForm(); }} className="p-3 hover:bg-gray-100 rounded-2xl transition-colors text-gray-400">
                 <XCircle size={20} />
               </button>
             </header>
             
-            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Unidad Organizativa</label>
                 <select 
@@ -292,16 +366,65 @@ export default function MisionesJefatura() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Destino de la Misión</label>
-                <input 
-                  type="text"
-                  name="destino" 
-                  required 
-                  placeholder="Ej: Oficina Regional de Santa Ana"
-                  className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-[#1a73e8] rounded-2xl transition-all text-sm font-bold"
-                />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Destinos (en orden de visita)</label>
+                  <button
+                    type="button"
+                    onClick={addDestino}
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase text-[#1a73e8] bg-blue-50 hover:bg-blue-100 transition-colors"
+                  >
+                    <Plus size={14} /> Agregar destino
+                  </button>
+                </div>
+                <datalist id="areas-destino">
+                  {areas.map(a => (
+                    <option key={a.id_area} value={a.nombre_area} />
+                  ))}
+                </datalist>
+                <div className="space-y-2">
+                  {destinos.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="w-7 h-7 shrink-0 rounded-xl bg-[#1a73e8]/10 text-[#1a73e8] text-[11px] font-black flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <input
+                        type="text"
+                        list="areas-destino"
+                        required
+                        value={d.nombre_destino}
+                        onChange={e => handleDestinoChange(i, e.target.value)}
+                        placeholder="Ej: Oficina Regional de Santa Ana"
+                        className="flex-1 px-4 py-3 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-[#1a73e8] rounded-2xl transition-all text-sm font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeDestino(i)}
+                        disabled={destinos.length <= 1}
+                        className="p-2 text-gray-300 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Quitar destino"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400 font-medium ml-1">
+                  Puede elegir un área del catálogo o escribir un destino libre. El orden es el de la visita.
+                </p>
               </div>
+
+              <label className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${esEmergencia ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-transparent'}`}>
+                <input
+                  type="checkbox"
+                  checked={esEmergencia}
+                  onChange={e => setEsEmergencia(e.target.checked)}
+                  className="w-5 h-5 accent-red-500"
+                />
+                <span className="flex items-center gap-2 text-sm font-black text-red-600">
+                  <AlertTriangle size={16} /> Marcar como emergencia
+                </span>
+              </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -336,7 +459,7 @@ export default function MisionesJefatura() {
               <footer className="pt-6 flex gap-4">
                 <button 
                   type="button" 
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => { setIsModalOpen(false); resetForm(); }}
                   className="flex-1 py-4 px-6 rounded-2xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors"
                 >
                   Cancelar

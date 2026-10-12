@@ -57,7 +57,7 @@ export async function enviarResumenDiario(hoy: string): Promise<void> {
 
     await transporter.sendMail({
       from: `"RNPN Vehículos" <${process.env.SMTP_USER}>`,
-      to: process.env.ADMIN_EMAIL || process.env.SMTP_USER,
+      to: process.env.EMAIL_ADMINS || process.env.SMTP_USER,
       subject: `Resumen de Asignaciones - ${hoy}`,
       html,
     })
@@ -97,7 +97,7 @@ export async function verificarMantenimiento(): Promise<void> {
 
     await transporter.sendMail({
       from: `"RNPN Vehículos" <${process.env.SMTP_USER}>`,
-      to: process.env.ADMIN_EMAIL || process.env.SMTP_USER,
+      to: process.env.EMAIL_ADMINS || process.env.SMTP_USER,
       subject: `Alerta de Mantenimiento de Vehículos`,
       html,
     })
@@ -106,5 +106,82 @@ export async function verificarMantenimiento(): Promise<void> {
   } catch (error) {
     logger.error('Error al verificar mantenimiento:', error)
     throw error
+  }
+}
+
+const formatearDestinos = (destinos: any[] | undefined, respaldo?: string | null): string => {
+  const lista = (destinos ?? []).map((d: any) => d?.nombre_destino).filter(Boolean)
+  if (lista.length === 0) return respaldo || 'Sin destino'
+  return lista.map((n: string, i: number) => `${i + 1}. ${n}`).join('<br>')
+}
+
+/**
+ * Avisa a administración que entró una nueva solicitud.
+ * No bloqueante: nunca lanza, solo registra en el log.
+ */
+export async function notificarNuevaSolicitud(mision: any): Promise<void> {
+  try {
+    const destinatario = process.env.EMAIL_ADMINS || process.env.SMTP_USER
+    if (!destinatario) {
+      logger.warn('notificarNuevaSolicitud: sin EMAIL_ADMINS ni SMTP_USER')
+      return
+    }
+
+    const emergencia = mision?.es_emergencia ? '<p><strong>MISIÓN DE EMERGENCIA</strong></p>' : ''
+    const html = `
+      <h2>Nueva solicitud de misión</h2>
+      ${emergencia}
+      <p><strong>Solicitante:</strong> ${mision?.solicitante?.nombre || 'N/A'}</p>
+      <p><strong>Unidad:</strong> ${mision?.unidad?.nombre_unidad || 'N/A'}</p>
+      <p><strong>Fecha:</strong> ${mision?.fecha_mision ? new Date(mision.fecha_mision).toLocaleDateString('es-SV') : 'N/A'} ${mision?.hora_mision || ''}</p>
+      <p><strong>Objetivo:</strong> ${mision?.objetivo_mision || 'N/A'}</p>
+      <p><strong>Destinos:</strong><br>${formatearDestinos(mision?.destinos, mision?.destino)}</p>
+    `
+
+    await transporter.sendMail({
+      from: `"RNPN Vehículos" <${process.env.SMTP_USER}>`,
+      to: destinatario,
+      subject: `${mision?.es_emergencia ? '[EMERGENCIA] ' : ''}Nueva solicitud de misión ${mision?.id_mision ?? ''}`,
+      html,
+    })
+
+    logger.info(`Notificación de nueva solicitud enviada (misión ${mision?.id_mision})`)
+  } catch (error: any) {
+    logger.warn(`Error al notificar nueva solicitud: ${error?.message ?? error}`)
+  }
+}
+
+/**
+ * Avisa al motorista que se le asignó una misión.
+ * No bloqueante: nunca lanza, solo registra en el log.
+ */
+export async function notificarMisionAsignada(mision: any): Promise<void> {
+  try {
+    const destinatario = mision?.motorista?.usuario?.correo
+    if (!destinatario) {
+      logger.warn(`notificarMisionAsignada: misión ${mision?.id_mision} sin correo de motorista`)
+      return
+    }
+
+    const emergencia = mision?.es_emergencia ? '<p><strong>MISIÓN DE EMERGENCIA</strong></p>' : ''
+    const html = `
+      <h2>Misión asignada</h2>
+      ${emergencia}
+      <p><strong>Vehículo:</strong> ${mision?.vehiculo?.placa || 'N/A'}</p>
+      <p><strong>Fecha:</strong> ${mision?.fecha_mision ? new Date(mision.fecha_mision).toLocaleDateString('es-SV') : 'N/A'} ${mision?.hora_mision || ''}</p>
+      <p><strong>Objetivo:</strong> ${mision?.objetivo_mision || 'N/A'}</p>
+      <p><strong>Destinos:</strong><br>${formatearDestinos(mision?.destinos, mision?.destino)}</p>
+    `
+
+    await transporter.sendMail({
+      from: `"RNPN Vehículos" <${process.env.SMTP_USER}>`,
+      to: destinatario,
+      subject: `${mision?.es_emergencia ? '[EMERGENCIA] ' : ''}Misión asignada ${mision?.id_mision ?? ''}`,
+      html,
+    })
+
+    logger.info(`Notificación de asignación enviada (misión ${mision?.id_mision})`)
+  } catch (error: any) {
+    logger.warn(`Error al notificar asignación: ${error?.message ?? error}`)
   }
 }

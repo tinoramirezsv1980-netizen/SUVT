@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import type { Mision, LogMovimientoMision, ControlAccesoSeguridad } from '../types';
 
 /**
  * Función para parsear fechas de forma segura evitando problemas de zona horaria
@@ -36,7 +37,7 @@ const formatTime = (dateStr: any): string => {
   return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 };
 
-export const generateMisionPDF = async (mision: any) => {
+export const generateMisionPDF = async (mision: Mision) => {
   const doc = new jsPDF({
     orientation: 'p',
     unit: 'mm',
@@ -47,23 +48,31 @@ export const generateMisionPDF = async (mision: any) => {
   const pageWidth = doc.internal.pageSize.width;
   
   // Extraer datos de tablas relacionadas
-  const movimientos = mision.movimientos || [];
-  const controles = mision.controles_acceso || [];
+  const movimientos: LogMovimientoMision[] = mision.movimientos || [];
+  const controles: ControlAccesoSeguridad[] = mision.controles_acceso || [];
 
   const llegadaMov = [...movimientos].reverse().find(
-    (m: any) => m.tipo_evento === 'finalizacion' && m.ubicacion === 'Base (Cierre de misión)'
+    (m) => m.tipo_evento === 'finalizacion' && m.ubicacion === 'Base (Cierre de misión)'
   );
   const hora_llegada = llegadaMov ? formatTime(llegadaMov.fecha_hora) : '__________';
 
   const entradaMov = [...movimientos].reverse().find(
-    (m: any) => m.tipo_evento === 'finalizacion'
+    (m) => m.tipo_evento === 'finalizacion'
   );
   const hora_entrada = entradaMov ? formatTime(entradaMov.fecha_hora) : '__________';
 
   const controlEntrada = [...controles].reverse().find(
-    (c: any) => c.tipo_movimiento === 'entrada_base'
+    (c) => c.tipo_movimiento === 'entrada_base'
   );
   const observaciones = controlEntrada?.observaciones || '';
+
+  // Ruta de destinos (orden de visita), con fallback al destino único
+  const destinosPDF = (mision.destinos ?? [])
+    .slice()
+    .sort((a, b) => a.orden_visita - b.orden_visita)
+    .map(d => d.nombre_destino)
+    .filter(Boolean);
+  const rutaDestinos = destinosPDF.length > 0 ? destinosPDF : (mision.destino ? [mision.destino] : []);
   
   // --- ENCABEZADO ---
   // Logo RNPN (Texto estilizado)
@@ -96,6 +105,20 @@ export const generateMisionPDF = async (mision: any) => {
   doc.setLineWidth(0.5);
   doc.line(margin, 38, pageWidth - margin, 38);
 
+  // Sello de EMERGENCIA
+  if (mision.es_emergencia) {
+    doc.setDrawColor(200, 0, 0);
+    doc.setTextColor(200, 0, 0);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(pageWidth - margin - 46, 26, 46, 10, 2, 2);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('EMERGENCIA', pageWidth - margin - 23, 33, { align: 'center' });
+    doc.setTextColor(0);
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.5);
+  }
+
   // --- SECCIÓN 1: DATOS DE LA MISIÓN ---
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
@@ -117,11 +140,22 @@ export const generateMisionPDF = async (mision: any) => {
   doc.text(hora_llegada, margin + 165, 52);
   doc.line(margin + 163, 53, pageWidth - margin, 53);
 
-  // Lugar de Visita
+  // Lugar de Visita (ruta multi-destino numerada)
+  doc.setFontSize(10);
   doc.text('Lugar de Visita:', margin, 60);
   doc.line(margin + 25, 61, pageWidth - margin, 61);
-  doc.setFontSize(9);
-  doc.text(mision.destino || '', margin + 27, 60);
+  doc.setFontSize(8);
+  const maxLineasDestino = 3;
+  if (rutaDestinos.length === 0) {
+    doc.text('', margin + 27, 65);
+  } else {
+    rutaDestinos.slice(0, maxLineasDestino).forEach((nombre, i) => {
+      doc.text(`${i + 1}. ${nombre}`, margin + 27, 65 + (i * 3));
+    });
+    if (rutaDestinos.length > maxLineasDestino) {
+      doc.text(`(+${rutaDestinos.length - maxLineasDestino} destinos más)`, margin + 27, 65 + (maxLineasDestino * 3));
+    }
+  }
   doc.line(margin, 67, pageWidth - margin, 67);
   doc.line(margin, 73, pageWidth - margin, 73);
 

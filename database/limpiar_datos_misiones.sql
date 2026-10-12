@@ -1,7 +1,7 @@
 -- Script para limpiar inconsistencias y reiniciar datos de misiones
--- Base de datos: rnpn_vehiculos_nueva
+-- Base de datos: rnpn_vehiculos_final
 
-USE rnpn_vehiculos_nueva;
+USE rnpn_vehiculos_final;
 
 -- 1. Desactivar chequeo de llaves foráneas para permitir truncado limpio
 SET FOREIGN_KEY_CHECKS = 0;
@@ -11,7 +11,8 @@ TRUNCATE TABLE log_movimientos_mision;
 TRUNCATE TABLE control_acceso_seguridad;
 TRUNCATE TABLE registro_combustible;
 
--- 3. Limpiar tabla principal de misiones
+-- 3. Limpiar destinos y tabla principal de misiones
+TRUNCATE TABLE destino_mision;
 TRUNCATE TABLE mision;
 
 -- 4. Asegurar que todos los vehículos vuelvan a estado 'disponible'

@@ -94,7 +94,7 @@ Levanta **backend x3 + frontend x2 + balanceador Nginx** (todo por `http://local
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado y corriendo (motor en ejecución).
 - XAMPP con MySQL activo en el puerto 3306.
-- Base de datos `rnpn_vehiculos_nueva` creada (igual que en el modo local).
+- Base de datos `rnpn_vehiculos_final` creada (igual que en el modo local).
 
 ### Uso
 

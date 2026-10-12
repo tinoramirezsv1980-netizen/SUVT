@@ -1,6 +1,12 @@
 import { Request, Response } from 'express'
 import prisma from '../prisma/client'
 import cloudinaryService from '../services/cloudinary.service'
+import { extractPublicId } from '../utils/cloudinary'
+import logger from '../utils/logger'
+import {
+  notificarNuevaSolicitud,
+  notificarMisionAsignada
+} from '../services/notifications/email.service'
 
 const mapFuelLevel = (fuel: any): any => {
   if (!fuel) return null
@@ -56,7 +62,12 @@ const mapTipoEvento = (evento: any): any => {
   }
 }
 
-// 1. Solicitud de Misión - Jefatura inicia el proceso
+const parseId = (value: any): number | null => {
+  const n = parseInt(value?.toString())
+  return isNaN(n) ? null : n
+}
+
+// 1. Solicitud de Misión - Jefatura inicia el proceso (multi-destino + emergencia)
 export const create = async (req: Request, res: Response) => {
   try {
     const {
@@ -67,22 +78,92 @@ export const create = async (req: Request, res: Response) => {
       destino,
       fecha_mision,
       hora_mision,
-      descripcion_mision
+      descripcion_mision,
+      destinos,
+      es_emergencia
     } = req.body
 
+    const solicitanteId = parseId(id_usuario_solicitante)
+    const usuarioId = parseId((req as any).usuarioId)
+
+    if (!solicitanteId) {
+      return res.status(400).json({ ok: false, error: 'id_usuario_solicitante es obligatorio' })
+    }
+
+    // Anti-suplantación: solo se puede solicitar a nombre propio
+    if (usuarioId && solicitanteId !== usuarioId) {
+      return res.status(403).json({
+        ok: false,
+        error: 'No puede crear una misión a nombre de otro usuario'
+      })
+    }
+
+    // Normalizar destinos: acepta destinos[] o un destino de texto suelto
+    const crudos: any[] = Array.isArray(destinos) && destinos.length
+      ? destinos
+      : (destino ? [{ nombre_destino: destino }] : [])
+
+    const normalizados = crudos
+      .map((d: any, i: number) => {
+        const nombre = (typeof d === 'string' ? d : d?.nombre_destino)?.toString().trim()
+        const idArea = typeof d === 'object' && d !== null ? parseId(d.id_area_destino) : null
+        return {
+          nombre_destino: nombre || '',
+          id_area_destino: idArea,
+          orden_visita: i + 1
+        }
+      })
+      .filter(d => d.nombre_destino)
+
+    if (normalizados.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Debe indicar al menos un destino' })
+    }
+
+    // Unidad: si el solicitante es motorista y no envió unidad, se usa la unidad base
+    let unidadId = parseId(id_unidad)
+    if (!unidadId) {
+      const solicitante = await prisma.usuario.findUnique({
+        where: { id_usuario: solicitanteId },
+        select: { id_motorista: true }
+      })
+      if (solicitante?.id_motorista) {
+        const base = await prisma.unidadOrganizativa.findFirst({
+          where: { nombre_unidad: 'Base/Parqueo de Vehículos' },
+          select: { id_unitat: true }
+        })
+        if (base) unidadId = base.id_unitat
+      }
+    }
+
+    if (!unidadId) {
+      return res.status(400).json({ ok: false, error: 'id_unidad es obligatorio' })
+    }
+
+    // Misión + destinos en una sola operación atómica (nested write)
     const mision = await prisma.mision.create({
       data: {
-        id_usuario_solicitante: parseInt(id_usuario_solicitante),
-        id_unidad: parseInt(id_unidad),
+        id_usuario_solicitante: solicitanteId,
+        id_unidad: unidadId,
         objetivo_mision,
         persona_mision,
-        destino,
+        // Compatibilidad: mision.destino = nombre del primer destino
+        destino: normalizados[0].nombre_destino,
         fecha_mision: fecha_mision ? new Date(fecha_mision) : null,
         hora_mision,
         descripcion_mision: descripcion_mision || '',
-        estado_mision: 'solicitada'
+        es_emergencia: es_emergencia === true || es_emergencia === 'true',
+        estado_mision: 'solicitada',
+        destinos: { create: normalizados }
+      },
+      include: {
+        destinos: { orderBy: { orden_visita: 'asc' }, include: { area_destino: true } }
       }
     })
+
+    // Notificación a administración: no bloqueante
+    notificarNuevaSolicitud(mision).catch(err =>
+      logger.warn(`No se pudo notificar la nueva solicitud: ${err.message}`)
+    )
 
     res.status(201).json({ ok: true, mision })
   } catch (error: any) {
@@ -101,8 +182,12 @@ export const assign = async (req: Request, res: Response) => {
       justificacion_cambio_vehiculo
     } = req.body // estado_mision puede ser 'aprobada' o 'rechazada'
 
-    const mision = await prisma.mision.update({
-      where: { id_mision: parseInt(id) },
+    const misionId = parseInt(id)
+
+    // La máquina de estados deja de ser decorativa: solo se asignan misiones
+    // que siguen en 'solicitada' o 'aprobada'.
+    const resultado = await prisma.mision.updateMany({
+      where: { id_mision: misionId, estado_mision: { in: ['solicitada', 'aprobada'] } },
       data: {
         id_vehiculo: id_vehiculo ? parseInt(id_vehiculo) : undefined,
         id_motorista: id_motorista ? parseInt(id_motorista) : undefined,
@@ -110,6 +195,27 @@ export const assign = async (req: Request, res: Response) => {
         justificacion_cambio_vehiculo: justificacion_cambio_vehiculo || null
       }
     })
+
+    if (resultado.count === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'La misión no existe o ya no admite asignación (estado inválido)'
+      })
+    }
+
+    const mision = await prisma.mision.findUnique({
+      where: { id_mision: misionId },
+      include: {
+        destinos: { orderBy: { orden_visita: 'asc' }, include: { area_destino: true } },
+        motorista: { include: { usuario: true } }
+      }
+    })
+
+    if (mision && mision.estado_mision === 'aprobada') {
+      notificarMisionAsignada(mision).catch(err =>
+        logger.warn(`No se pudo notificar la asignación: ${err.message}`)
+      )
+    }
 
     res.json({ ok: true, mision })
   } catch (error: any) {
@@ -158,6 +264,7 @@ export const addMovement = async (req: Request, res: Response) => {
   try {
     const {
       id_mision,
+      id_destino_mision,
       tipo_evento,
       ubicacion,
       kilometraje_registro,
@@ -189,8 +296,25 @@ export const addMovement = async (req: Request, res: Response) => {
       })
     }
 
+    // Validar que el destino, si viene, pertenece a esta misión
+    let destinoId = parseId(id_destino_mision)
+    if (destinoId) {
+      const destino = await prisma.destinoMision.findFirst({
+        where: { id_destino_mision: destinoId, id_mision: misionId },
+        select: { id_destino_mision: true }
+      })
+      if (!destino) {
+        return res.status(400).json({
+          ok: false,
+          error: 'El destino indicado no pertenece a la misión'
+        })
+      }
+    } else {
+      destinoId = null
+    }
+
     console.log(
-      `[Movement] Mision: ${misionId}, Evento: ${cleanEvento}, KM: ${km}, Fuel: ${cleanFuel}`
+      `[Movement] Mision: ${misionId}, Destino: ${destinoId}, Evento: ${cleanEvento}, KM: ${km}, Fuel: ${cleanFuel}`
     );
 
     // Registrar el movimiento y actualizar misión en una transacción atómica
@@ -212,6 +336,7 @@ export const addMovement = async (req: Request, res: Response) => {
       return await tx.logMovimientoMision.create({
         data: {
           id_mision: misionId,
+          id_destino_mision: destinoId,
           tipo_evento: cleanEvento,
           ubicacion: ubicacion || 'Ubicación no especificada',
           kilometraje_registro: km,
@@ -232,8 +357,6 @@ export const addMovement = async (req: Request, res: Response) => {
       error: error.message
     })
   }
-
-  /* eliminado bloque anidado incorrecto catch txError */
 }
 
 // 8. Finalización - Motorista cierra la misión
@@ -262,6 +385,29 @@ export const finalize = async (req: Request, res: Response) => {
 
     // Ejecutar todo el cierre en una transacción atómica
     await prisma.$transaction(async (tx) => {
+
+      // 0. Gate de cierre: el destino de mayor orden_visita debe tener su salida
+      const ultimoDestino = await tx.destinoMision.findFirst({
+        where: { id_mision: misionId },
+        orderBy: { orden_visita: 'desc' }
+      })
+
+      if (ultimoDestino) {
+        const salida = await tx.logMovimientoMision.findFirst({
+          where: {
+            id_mision: misionId,
+            id_destino_mision: ultimoDestino.id_destino_mision,
+            tipo_evento: 'salida_destino'
+          },
+          select: { id_log: true }
+        })
+
+        if (!salida) {
+          throw new Error(
+            `No se puede finalizar: falta registrar la salida del último destino (${ultimoDestino.nombre_destino})`
+          )
+        }
+      }
 
       // 1. Obtener la misión para saber qué vehículo actualizar
       const misionActual = await tx.mision.findUnique({
@@ -339,11 +485,13 @@ export const getAll = async (_req: Request, res: Response) => {
   try {
     const misiones = await prisma.mision.findMany({
       include: {
-        solicitante: true,
+        solicitante: { select: { id_usuario: true, nombre: true, correo: true } },
         unidad: true,
         vehiculo: true,
         motorista: true,
-        movimientos: true,
+        destinos: { orderBy: { orden_visita: 'asc' }, include: { area_destino: true } },
+        // Orden explícito: PanelMotorista usa .find() sobre este arreglo
+        movimientos: { orderBy: { fecha_hora: 'asc' } },
         controles_acceso: true
       },
       orderBy: { fecha_solicitud: 'desc' }
@@ -360,10 +508,60 @@ export const getAll = async (_req: Request, res: Response) => {
   }
 }
 
+// Agregar un destino en ruta (solo Admin, misiones aprobada/en_curso)
+export const addDestino = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id)
+    const { nombre_destino, id_area_destino } = req.body
+
+    if (!nombre_destino || !nombre_destino.toString().trim()) {
+      return res.status(400).json({ ok: false, error: 'nombre_destino es obligatorio' })
+    }
+
+    const mision = await prisma.mision.findUnique({
+      where: { id_mision: id },
+      select: { id_mision: true, estado_mision: true }
+    })
+
+    if (!mision) {
+      return res.status(404).json({ ok: false, error: 'La misión no existe' })
+    }
+
+    if (!['aprobada', 'en_curso'].includes(mision.estado_mision)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Solo se pueden agregar destinos a misiones aprobadas o en curso'
+      })
+    }
+
+    const ultimo = await prisma.destinoMision.findFirst({
+      where: { id_mision: id },
+      orderBy: { orden_visita: 'desc' },
+      select: { orden_visita: true }
+    })
+
+    // No se toca Mision.destino: sigue siendo el primer destino
+    const destino = await prisma.destinoMision.create({
+      data: {
+        id_mision: id,
+        nombre_destino: nombre_destino.toString().trim(),
+        id_area_destino: parseId(id_area_destino),
+        orden_visita: (ultimo?.orden_visita ?? 0) + 1
+      },
+      include: { area_destino: true }
+    })
+
+    res.status(201).json({ ok: true, destino })
+  } catch (error: any) {
+    console.error('[Add Destino Error]', error)
+    res.status(400).json({ ok: false, error: error.message })
+  }
+}
+
 // Subir documento de respaldo (PDF/Imagen)
 export const uploadDocument = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params
+    const id = parseInt(req.params.id)
 
     if (!req.file) {
       return res.status(400).json({
@@ -372,19 +570,40 @@ export const uploadDocument = async (req: Request, res: Response) => {
       })
     }
 
-    // Subir directamente desde memoria a Cloudinary
+    const anterior = await prisma.mision.findUnique({
+      where: { id_mision: id },
+      select: { documento_respaldo: true }
+    })
+
+    // 1. Subir el nuevo. Si esto falla, se conserva el anterior.
     const resultado = await cloudinaryService.uploadFile(
       req.file.buffer,
       'SUVT/Misiones'
     )
 
-    // Guardar la URL pública del documento en la misión
+    // 2. Guardar la URL pública del documento en la misión
     const mision = await prisma.mision.update({
-      where: { id_mision: parseInt(id) },
+      where: { id_mision: id },
       data: {
         documento_respaldo: resultado.secure_url
+      },
+      include: {
+        destinos: { orderBy: { orden_visita: 'asc' }, include: { area_destino: true } }
       }
     })
+
+    // 3. Borrar el anterior en Cloudinary. No bloqueante.
+    const previo = anterior?.documento_respaldo
+    if (previo && previo !== resultado.secure_url) {
+      const parsed = extractPublicId(previo)
+      if (parsed) {
+        try {
+          await cloudinaryService.deleteFile(parsed.publicId, parsed.resourceType)
+        } catch (e) {
+          logger.warn(`No se pudo borrar el documento anterior: ${(e as Error).message}`)
+        }
+      }
+    }
 
     res.json({
       ok: true,
@@ -403,5 +622,31 @@ export const uploadDocument = async (req: Request, res: Response) => {
       ok: false,
       error: error.message
     })
+  }
+}
+
+// Eliminar el documento de respaldo (solo Admin)
+export const deleteDocument = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id)
+    const mision = await prisma.mision.findUnique({ where: { id_mision: id } })
+
+    if (!mision?.documento_respaldo) {
+      return res.status(404).json({ ok: false, error: 'La misión no tiene documento asociado' })
+    }
+
+    const parsed = extractPublicId(mision.documento_respaldo)
+    if (parsed) {
+      try {
+        await cloudinaryService.deleteFile(parsed.publicId, parsed.resourceType)
+      } catch (e) {
+        logger.warn(`No se pudo borrar de Cloudinary ${parsed.publicId}: ${(e as Error).message}`)
+      }
+    }
+
+    await prisma.mision.update({ where: { id_mision: id }, data: { documento_respaldo: null } })
+    res.json({ ok: true })
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message })
   }
 }

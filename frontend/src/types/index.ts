@@ -50,6 +50,25 @@ export interface UnidadOrganizativa {
 
 export type EstadoMision = 'solicitada' | 'aprobada' | 'rechazada' | 'en_curso' | 'finalizada';
 
+export interface AreaDestino {
+  id_area: number;
+  nombre_area: string;
+  alias?: string | null;
+  tipo: 'interna' | 'institucional' | 'externa' | 'medica' | 'penal' | 'financiera';
+  departamento?: string | null;
+  municipio?: string | null;
+  activo: boolean;
+}
+
+export interface DestinoMision {
+  id_destino_mision: number;
+  id_mision: number;
+  id_area_destino?: number | null;
+  nombre_destino: string;
+  orden_visita: number;
+  area_destino?: AreaDestino | null;
+}
+
 export interface Mision {
   id_mision: number;
   id_usuario_solicitante: number;
@@ -69,10 +88,12 @@ export interface Mision {
   kilometraje_inicial?: number;
   kilometraje_final?: number;
   observaciones_mision?: string;
+  es_emergencia?: boolean;
   solicitante?: Usuario;
   unidad?: UnidadOrganizativa;
   vehiculo?: Vehiculo;
   motorista?: Motorista;
+  destinos?: DestinoMision[];
   movimientos?: LogMovimientoMision[];
   controles_acceso?: ControlAccesoSeguridad[];
 }
@@ -80,6 +101,7 @@ export interface Mision {
 export interface LogMovimientoMision {
   id_log: number;
   id_mision: number;
+  id_destino_mision?: number | null;
   tipo_evento: 'salida_base' | 'llegada_destino' | 'salida_destino' | 'parada_tecnica' | 'incidente' | 'retorno_base' | 'finalizacion';
   ubicacion: string;
   fecha_hora: string;
@@ -104,28 +126,4 @@ export interface AuthResponse {
     usuario: Usuario;
   };
   error?: string;
-}
-
-/** @deprecated Modelo temporal durante migracion a Mision */
-export interface Asignacion {
-  id_asignacion: number;
-  id_motorista?: number;
-  id_vehiculo?: number;
-  fecha: string;
-  dia_semana: string;
-  tipo_actividad: string;
-  mision?: string;
-  objetivo_mision?: string;
-  hora_salida?: string | null;
-  estado: EstadoMision;
-  unidad_solicitante?: string;
-  destino?: string;
-  area_destino?: { nombre_area: string };
-  kilometraje_retorno?: number;
-  hoja_transporte_rnpn?: string;
-  aplica_vales?: boolean;
-  detalle_vales?: string;
-  id_semana?: number;
-  motorista: Motorista;
-  vehiculo?: Vehiculo;
 }

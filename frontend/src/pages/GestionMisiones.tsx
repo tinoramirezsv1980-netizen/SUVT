@@ -3,22 +3,25 @@ import { useSearchParams } from 'react-router-dom';
 import { 
   CheckCircle, 
   XCircle, 
-  //Clock, 
   User, 
   Car, 
   Search, 
   Loader2,
-  //Calendar,
-  //Filter,
   Printer,
   Upload,
-  FileCheck
+  FileCheck,
+  Trash2,
+  MapPin,
+  AlertTriangle,
+  Plus
 } from 'lucide-react';
 import api from '../api/axios';
+import { useAuth } from '../contexts/AuthContext';
 import type { Mision, Motorista, Vehiculo } from '../types';
 import { generateMisionPDF } from '../utils/pdfGenerator';
 
 export default function GestionMisiones() {
+  const { user } = useAuth();
   const [misiones, setMisiones] = useState<Mision[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
@@ -28,7 +31,21 @@ export default function GestionMisiones() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState<number | null>(null);
   const [filtro, setFiltro] = useState<'todas' | 'solicitadas' | 'en_curso'>('todas');
+  const [addDestinoMision, setAddDestinoMision] = useState<Mision | null>(null);
+  const [nuevoDestino, setNuevoDestino] = useState('');
+  const [isAddingDestino, setIsAddingDestino] = useState(false);
   const [searchParams] = useSearchParams();
+
+  const esAdmin = user?.rol === 'admin';
+
+  const destinosDe = (m: Mision) =>
+    (m.destinos ?? []).slice().sort((a, b) => a.orden_visita - b.orden_visita);
+
+  const resumenDestinos = (m: Mision) => {
+    const nombres = destinosDe(m).map(d => d.nombre_destino).filter(Boolean);
+    if (nombres.length > 0) return nombres.join(' → ');
+    return m.destino || 'Sin destino';
+  };
   
   // States for vehicle auto-assignment
   const [selectedMotoristaId, setSelectedMotoristaId] = useState<number | ''>('');
@@ -132,11 +149,43 @@ export default function GestionMisiones() {
       });
       fetchData();
       alert('Documento subido correctamente');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading file:', error);
-      alert('Error al subir el documento');
+      alert(error.response?.data?.error || 'Error al subir el documento');
     } finally {
       setIsUploading(null);
+    }
+  };
+
+  const handleDeleteDocument = async (id_mision: number) => {
+    if (!confirm('¿Eliminar el documento de respaldo? Se borrará también de Cloudinary.')) return;
+    try {
+      await api.delete(`/misiones/${id_mision}/documento`);
+      fetchData();
+    } catch (error: any) {
+      console.error('Error deleting document:', error);
+      alert(error.response?.data?.error || 'Error al eliminar el documento');
+    }
+  };
+
+  const handleAddDestino = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!addDestinoMision) return;
+    if (!nuevoDestino.trim()) return;
+
+    setIsAddingDestino(true);
+    try {
+      await api.patch(`/misiones/${addDestinoMision.id_mision}/destinos`, {
+        nombre_destino: nuevoDestino.trim()
+      });
+      fetchData();
+      setAddDestinoMision(null);
+      setNuevoDestino('');
+    } catch (error: any) {
+      console.error('Error adding destino:', error);
+      alert(error.response?.data?.error || 'Error al agregar el destino');
+    } finally {
+      setIsAddingDestino(false);
     }
   };
 
@@ -207,7 +256,18 @@ export default function GestionMisiones() {
                   </td>
                   <td className="p-6">
                     <p className="text-sm text-gray-600 font-medium line-clamp-1">{m.descripcion_mision}</p>
-                    <span className="text-[10px] text-[#1a73e8] font-black">{new Date(m.fecha_solicitud).toLocaleString()}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] text-[#1a73e8] font-black">{new Date(m.fecha_solicitud).toLocaleString()}</span>
+                      <span className="flex items-center gap-1 text-[10px] font-black text-gray-400 uppercase">
+                        <MapPin size={11} /> {destinosDe(m).length || 1} {destinosDe(m).length === 1 ? 'destino' : 'destinos'}
+                      </span>
+                      {m.es_emergencia && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-700 border border-red-200">
+                          <AlertTriangle size={10} /> Emergencia
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium line-clamp-1 mt-0.5">{resumenDestinos(m)}</p>
                   </td>
                   <td className="p-6">
                     {m.motorista ? (
@@ -256,6 +316,15 @@ export default function GestionMisiones() {
                         </button>
                       </>
                     )}
+                    {(m.estado_mision === 'aprobada' || m.estado_mision === 'en_curso') && (
+                      <button
+                        onClick={() => { setAddDestinoMision(m); setNuevoDestino(''); }}
+                        className="p-2 sm:p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-500 hover:text-white transition-all shadow-sm"
+                        title="Agregar Destino en Ruta"
+                      >
+                        <MapPin size={18} />
+                      </button>
+                    )}
                     <div className="flex items-center justify-end gap-2">
                       {m.documento_respaldo && (
                         <a 
@@ -268,6 +337,15 @@ export default function GestionMisiones() {
                         >
                           <FileCheck size={18} />
                         </a>
+                      )}
+                      {m.documento_respaldo && esAdmin && (
+                        <button
+                          onClick={() => handleDeleteDocument(m.id_mision)}
+                          className="p-2 sm:p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                          title="ELIMINAR DOCUMENTO DE RESPALDO"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       )}
                       <button 
                         onClick={() => generateMisionPDF(m)}
@@ -299,13 +377,15 @@ export default function GestionMisiones() {
                           const obsSeguridad = m.controles_acceso?.map(c => 
                             `- ${c.tipo_movimiento === 'salida_base' ? 'SALIDA' : 'REGRESO'}: ${c.observaciones || 'Sin novedad'}`
                           ).join('\n') || 'No hay registros de seguridad';
+                          const ruta = destinosDe(m).map((d, i) => `  ${i + 1}. ${d.nombre_destino}`).join('\n') || (m.destino || 'N/A');
 
                           alert(
                             `Detalles de Misión #M-${m.id_mision}\n` +
                             `----------------------------------\n` +
                             `Objetivo: ${m.objetivo_mision || 'N/A'}\n` +
                             `Descripción: ${m.persona_mision || m.descripcion_mision || 'N/A'}\n` +
-                            `Destino: ${m.destino || 'N/A'}\n` +
+                            `Emergencia: ${m.es_emergencia ? 'SÍ' : 'No'}\n` +
+                            `Destinos:\n${ruta}\n` +
                             `Fecha: ${m.fecha_mision ? new Date(m.fecha_mision).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : 'N/A'}\n\n` +
                             `INFORMACIÓN TÉCNICA:\n` +
                             `KM Inicial: ${kmIni} KM\n` +
@@ -438,6 +518,61 @@ export default function GestionMisiones() {
                     <>
                       <CheckCircle size={18} />
                       <span>Aprobar y Programar</span>
+                    </>
+                  )}
+                </button>
+              </footer>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {addDestinoMision && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <header className="p-8 pb-4 flex justify-between items-center border-b border-gray-50 bg-indigo-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                  <MapPin size={20} />
+                </div>
+                <h2 className="text-2xl font-black text-gray-900">Agregar Destino</h2>
+              </div>
+              <button onClick={() => setAddDestinoMision(null)} className="p-3 hover:bg-gray-100 rounded-2xl transition-colors text-gray-400">
+                <XCircle size={20} />
+              </button>
+            </header>
+
+            <form onSubmit={handleAddDestino} className="p-8 space-y-6">
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Misión #M-{addDestinoMision.id_mision}</p>
+                <p className="text-[11px] font-medium text-gray-600">Ruta actual: {resumenDestinos(addDestinoMision)}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Nuevo Destino</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={nuevoDestino}
+                  onChange={e => setNuevoDestino(e.target.value)}
+                  placeholder="Ej: Oficina Regional de San Miguel"
+                  className="w-full px-5 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded-2xl transition-all text-sm font-bold"
+                />
+                <p className="text-[10px] text-gray-400 font-medium ml-1">
+                  Se agregará al final de la ruta. El cierre de la misión volverá a bloquearse hasta registrar su salida.
+                </p>
+              </div>
+
+              <footer className="pt-2 flex gap-4">
+                <button type="button" onClick={() => setAddDestinoMision(null)} className="flex-1 py-4 px-6 rounded-2xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={isAddingDestino} className="flex-[2] py-4 px-6 bg-indigo-500 text-white rounded-2xl text-sm font-black shadow-lg shadow-indigo-500/20 hover:bg-indigo-600 transition-all flex items-center justify-center gap-2">
+                  {isAddingDestino ? <Loader2 className="animate-spin w-5 h-5" /> : (
+                    <>
+                      <Plus size={18} />
+                      <span>Agregar Destino</span>
                     </>
                   )}
                 </button>

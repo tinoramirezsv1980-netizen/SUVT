@@ -12,7 +12,7 @@ echo Prisma ORM para conectarse a MySQL (XAMPP).
 echo.
 echo REQUISITOS ANTES DE EJECUTAR:
 echo   [1] XAMPP debe estar abierto y MySQL iniciado
-echo   [2] La base de datos rnpn_vehiculos debe existir
+echo   [2] La base de datos rnpn_vehiculos_final debe existir
 echo   [3] El archivo .env debe estar configurado
 echo.
 pause
@@ -79,10 +79,10 @@ IF %ERRORLEVEL% NEQ 0 (
     echo         Posibles causas:
     echo           * MySQL no esta corriendo en XAMPP
     echo           * La DATABASE_URL en .env es incorrecta
-    echo           * La base de datos rnpn_vehiculos no existe
+    echo           * La base de datos rnpn_vehiculos_final no existe
     echo.
     echo         Verifique que en .env tenga:
-    echo         DATABASE_URL="mysql://root:@localhost:3306/rnpn_vehiculos"
+    echo         DATABASE_URL="mysql://root:@localhost:3306/rnpn_vehiculos_final"
     echo.
     pause
     exit /b 1

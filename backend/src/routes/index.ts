@@ -6,6 +6,7 @@ import vehiculoRoutes from './vehiculos.routes'
 import usuariosRoutes from './usuarios.routes'
 import misionesRoutes from './misiones.routes'
 import unidadesRoutes from './unidades.routes'
+import areasRoutes from './areas.routes'
 
 const router = Router()
 
@@ -16,5 +17,6 @@ router.use('/vehiculos', vehiculoRoutes)
 // router.use('/asignaciones', asignacionRoutes)
 router.use('/misiones', misionesRoutes)
 router.use('/unidades', unidadesRoutes)
+router.use('/areas', areasRoutes)
 
 export default router

@@ -15,6 +15,18 @@ import { iniciarCrons } from './jobs/cron'
 const app  = express()
 const PORT = parseInt(process.env.PORT ?? '4000')
 
+// Nombre de la base de datos activa, derivado de DATABASE_URL (nunca fijo)
+const DB_NAME = (() => {
+  const raw = (process.env.DATABASE_URL ?? '').replace(/^["']|["']$/g, '')
+  try {
+    const u = new URL(raw)
+    const nombre = u.pathname.replace(/^\//, '')
+    return nombre ? `mysql/${nombre}` : 'mysql/desconocida'
+  } catch {
+    return 'mysql/desconocida'
+  }
+})()
+
 // ── Seguridad ──────────────────────────────────────────────
 app.use(helmet())
 app.use(cors({
@@ -44,7 +56,7 @@ app.get('/health', (_req, res) => {
     status: 'running',
     ts:     new Date().toISOString(),
     env:    process.env.NODE_ENV,
-    db:     'mysql/xampp',
+    db:     DB_NAME,
   })
 })
 
@@ -65,8 +77,8 @@ async function main() {
 
     app.listen(PORT, () => {
       logger.info(`API RNPN → http://localhost:${PORT}`)
-      logger.info(`Frontend → http://localhost:5173`)
-      logger.info(`phpMyAdmin → http://localhost/phpmyadmin`)
+      logger.info(`Frontend → ${process.env.CORS_ORIGIN ?? 'http://localhost:5173'}`)
+      logger.info(`Base de datos → ${DB_NAME}`)
       logger.info(`Ambiente: ${process.env.NODE_ENV ?? 'development'}`)
     })
   } catch (err) {

@@ -5,9 +5,10 @@ async function main() {
   await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
   await prisma.$executeRawUnsafe('TRUNCATE TABLE control_acceso_seguridad;');
   await prisma.$executeRawUnsafe('TRUNCATE TABLE log_movimientos_mision;');
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE destino_mision;');
   await prisma.$executeRawUnsafe('TRUNCATE TABLE mision;');
   await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1;');
-  console.log('Tablas control_acceso_seguridad, log_movimientos_mision y mision han sido vaciadas a cero.');
+  console.log('Tablas control_acceso_seguridad, log_movimientos_mision, destino_mision y mision han sido vaciadas a cero.');
 }
 
 main()
