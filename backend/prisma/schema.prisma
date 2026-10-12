@@ -61,13 +61,14 @@ model ConductorHabitual {
 }
 
 model AreaDestino {
-  id_area      Int      @id @default(autoincrement())
-  nombre_area  String   @db.VarChar(120)
-  alias        String?  @db.VarChar(60)
-  tipo         TipoArea @default(interna)
-  departamento String?  @db.VarChar(60)
-  municipio    String?  @db.VarChar(60)
-  activo       Boolean  @default(true)
+  id_area         Int              @id @default(autoincrement())
+  nombre_area     String           @db.VarChar(120)
+  alias           String?          @db.VarChar(60)
+  tipo            TipoArea         @default(interna)
+  departamento    String?          @db.VarChar(60)
+  municipio       String?          @db.VarChar(60)
+  activo          Boolean          @default(true)
+  destinos_mision DestinoMision[]
 
   @@map("area_destino")
 }
@@ -115,12 +116,14 @@ model Mision {
   objetivo_mision               String?                  @db.VarChar(255)
   destino                       String?                  @db.VarChar(255)
   persona_mision                String?                  @db.Text
-  documento_respaldo            String?                  @db.VarChar(255)
+  documento_respaldo            String?                  @db.Text
   justificacion_cambio_vehiculo String?                  @db.VarChar(255)
   kilometraje_inicial           Int?
   kilometraje_final             Int?
   observaciones_mision          String?                  @db.Text
+  es_emergencia                 Boolean                  @default(false)
   controles_acceso              ControlAccesoSeguridad[]
+  destinos                      DestinoMision[]
   movimientos                   LogMovimientoMision[]
   motorista                     Motorista?               @relation(fields: [id_motorista], references: [id_motorista])
   unidad                        UnidadOrganizativa       @relation(fields: [id_unidad], references: [id_unitat])
@@ -138,15 +141,33 @@ model Mision {
 model LogMovimientoMision {
   id_log               Int               @id @default(autoincrement())
   id_mision            Int
+  id_destino_mision    Int?
   tipo_evento          TipoEventoMision
   ubicacion            String            @db.VarChar(255)
   fecha_hora           DateTime          @default(now())
   kilometraje_registro Int?
   nivel_combustible    NivelCombustible?
+  destino_mision       DestinoMision?    @relation("movimientos", fields: [id_destino_mision], references: [id_destino_mision], onDelete: Restrict, map: "log_movimientos_id_destino_mision_fkey")
   mision               Mision            @relation(fields: [id_mision], references: [id_mision], onDelete: Cascade)
 
   @@index([id_mision], map: "log_movimientos_mision_id_mision_fkey")
+  @@index([id_destino_mision], map: "log_movimientos_id_destino_mision_fkey")
   @@map("log_movimientos_mision")
+}
+
+model DestinoMision {
+  id_destino_mision Int                   @id @default(autoincrement())
+  id_mision         Int
+  id_area_destino   Int?
+  nombre_destino    String                @db.VarChar(255)
+  orden_visita      Int
+  area_destino      AreaDestino?          @relation(fields: [id_area_destino], references: [id_area], onDelete: SetNull, map: "destino_mision_id_area_fkey")
+  mision            Mision                @relation(fields: [id_mision], references: [id_mision], onDelete: Cascade)
+  movimientos       LogMovimientoMision[] @relation("movimientos")
+
+  @@unique([id_mision, orden_visita], map: "uq_destino_mision_orden")
+  @@index([id_area_destino], map: "idx_destino_mision_area")
+  @@map("destino_mision")
 }
 
 model ControlAccesoSeguridad {
