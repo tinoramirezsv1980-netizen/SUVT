@@ -28,10 +28,18 @@ export default function ControlSeguridad() {
     try {
       setLoading(true);
       const resp = await api.get('misiones');
-      // Filtrar misiones que están aprobadas (para salida) o en curso (para entrada)
-      setMisiones(resp.data.misiones.filter((m: Mision) => 
-        m.estado_mision === 'aprobada' || m.estado_mision === 'en_curso'
-      ));
+      // Aprobadas (salida), en curso (entrada) y finalizadas sin entrada registrada
+      // (para poder completar el control de acceso aunque el motorista ya haya cerrado)
+      setMisiones(resp.data.misiones.filter((m: Mision) => {
+        const tieneEntrada = m.controles_acceso?.some(
+          c => c.tipo_movimiento === 'entrada_base'
+        );
+        return (
+          m.estado_mision === 'aprobada' ||
+          m.estado_mision === 'en_curso' ||
+          (m.estado_mision === 'finalizada' && !tieneEntrada)
+        );
+      }));
     } catch (error) {
       console.error('Error fetching misiones:', error);
     } finally {
@@ -88,6 +96,11 @@ export default function ControlSeguridad() {
     }
   };
 
+  const pendientesEntrada = misiones.filter(
+    m => (m.estado_mision === 'en_curso' || m.estado_mision === 'finalizada')
+      && !m.controles_acceso?.some(c => c.tipo_movimiento === 'entrada_base')
+  );
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       <header>
@@ -134,15 +147,15 @@ export default function ControlSeguridad() {
         <div className="space-y-6">
           <div className="flex items-center gap-3 px-6 py-4 bg-emerald-50 border border-emerald-100 rounded-[2rem]">
             <ArrowDownLeft className="text-emerald-500" />
-            <h2 className="text-lg font-black text-emerald-900 uppercase tracking-tight">Misiones en Curso (Entrada)</h2>
+            <h2 className="text-lg font-black text-emerald-900 uppercase tracking-tight">Pendientes de Entrada</h2>
           </div>
 
           <div className="space-y-4">
             {loading ? (
               <Loader2 className="w-8 h-8 animate-spin text-gray-300 mx-auto" />
-            ) : misiones.filter(m => m.estado_mision === 'en_curso' && !m.controles_acceso?.some(c => c.tipo_movimiento === 'entrada_base')).length === 0 ? (
-              <p className="text-center py-10 text-gray-400 font-medium bg-gray-50 rounded-[2rem] border border-dashed">No hay misiones activas fuera de base</p>
-            ) : misiones.filter(m => m.estado_mision === 'en_curso' && !m.controles_acceso?.some(c => c.tipo_movimiento === 'entrada_base')).map(m => (
+            ) : pendientesEntrada.length === 0 ? (
+              <p className="text-center py-10 text-gray-400 font-medium bg-gray-50 rounded-[2rem] border border-dashed">No hay misiones pendientes de entrada</p>
+            ) : pendientesEntrada.map(m => (
               <div key={m.id_mision} className="glass p-6 rounded-[2rem] border border-white/40 shadow-xl flex items-center justify-between group hover:scale-[1.02] transition-all">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 font-black">

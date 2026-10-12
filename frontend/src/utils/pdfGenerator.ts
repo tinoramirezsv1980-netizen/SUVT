@@ -140,23 +140,43 @@ export const generateMisionPDF = async (mision: Mision) => {
   doc.text(hora_llegada, margin + 165, 52);
   doc.line(margin + 163, 53, pageWidth - margin, 53);
 
-  // Lugar de Visita (ruta multi-destino numerada)
+  // Lugar de Visita (ruta multi-destino numerada, envuelta y centrada en la caja)
   doc.setFontSize(10);
   doc.text('Lugar de Visita:', margin, 60);
   doc.line(margin + 25, 61, pageWidth - margin, 61);
+
+  const inicioX = margin + 27;
+  const anchoTexto = pageWidth - margin - inicioX - 2;
+  const lineHeight = 2.6;
+  const yTop = 62.5;
+  const yBottom = 72.5;
+  const maxLineas = Math.floor((yBottom - yTop) / lineHeight) + 1;
+
   doc.setFontSize(8);
-  const maxLineasDestino = 3;
-  if (rutaDestinos.length === 0) {
-    doc.text('', margin + 27, 65);
-  } else {
-    rutaDestinos.slice(0, maxLineasDestino).forEach((nombre, i) => {
-      doc.text(`${i + 1}. ${nombre}`, margin + 27, 65 + (i * 3));
-    });
-    if (rutaDestinos.length > maxLineasDestino) {
-      doc.text(`(+${rutaDestinos.length - maxLineasDestino} destinos más)`, margin + 27, 65 + (maxLineasDestino * 3));
+
+  // Envolver cada destino dentro del ancho de la caja y numerarlos
+  let lineasDestino: string[] = [];
+  let omitidos = 0;
+  for (let i = 0; i < rutaDestinos.length; i++) {
+    const envuelto = doc.splitTextToSize(`${i + 1}. ${rutaDestinos[i]}`, anchoTexto) as string[];
+    if (lineasDestino.length + envuelto.length > maxLineas) {
+      omitidos = rutaDestinos.length - i;
+      break;
     }
+    lineasDestino = lineasDestino.concat(envuelto);
   }
-  doc.line(margin, 67, pageWidth - margin, 67);
+  if (omitidos > 0) {
+    while (lineasDestino.length >= maxLineas) lineasDestino.pop();
+    lineasDestino.push(`(+${omitidos} destinos más)`);
+  }
+
+  // Centrado vertical dentro de la caja 61-73 mm
+  if (lineasDestino.length > 0) {
+    const altura = (lineasDestino.length - 1) * lineHeight;
+    const inicioY = yTop + ((yBottom - yTop) - altura) / 2;
+    lineasDestino.forEach((linea, i) => doc.text(linea, inicioX, inicioY + i * lineHeight));
+  }
+
   doc.line(margin, 73, pageWidth - margin, 73);
 
   // Propósito de Visita

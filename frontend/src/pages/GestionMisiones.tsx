@@ -46,6 +46,41 @@ export default function GestionMisiones() {
     if (nombres.length > 0) return nombres.join(' → ');
     return m.destino || 'Sin destino';
   };
+
+  const destinoDe = (m: Mision, id?: number | null) =>
+    destinosDe(m).find(d => d.id_destino_mision === id)?.nombre_destino;
+
+  // Posición actual del motorista según su último movimiento (solo en misión en curso)
+  const estadoUbicacion = (m: Mision): string | null => {
+    if (m.estado_mision !== 'en_curso') return null;
+    const movs = m.movimientos ?? [];
+    const ultimo = movs[movs.length - 1];
+    if (!ultimo) return 'Sin movimientos registrados';
+
+    const hora = new Date(ultimo.fecha_hora).toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    switch (ultimo.tipo_evento) {
+      case 'salida_base':
+        return `Salió de Base · ${hora}`;
+      case 'llegada_destino':
+        return `En destino: ${destinoDe(m, ultimo.id_destino_mision) || ultimo.ubicacion} · ${hora}`;
+      case 'salida_destino':
+        return `En ruta (salió de ${destinoDe(m, ultimo.id_destino_mision) || ultimo.ubicacion}) · ${hora}`;
+      case 'parada_tecnica':
+        return `Parada técnica: ${ultimo.ubicacion} · ${hora}`;
+      case 'incidente':
+        return `Incidente: ${ultimo.ubicacion} · ${hora}`;
+      case 'retorno_base':
+        return `Regresando a Base · ${hora}`;
+      case 'finalizacion':
+        return `En Base (cerrada) · ${hora}`;
+      default:
+        return `${ultimo.ubicacion} · ${hora}`;
+    }
+  };
   
   // States for vehicle auto-assignment
   const [selectedMotoristaId, setSelectedMotoristaId] = useState<number | ''>('');
@@ -291,6 +326,12 @@ export default function GestionMisiones() {
                     }`}>
                       {m.estado_mision}
                     </span>
+                    {estadoUbicacion(m) && (
+                      <div className="mt-2 flex items-start gap-1 max-w-[190px] text-[10px] font-bold text-indigo-600">
+                        <MapPin size={11} className="mt-0.5 shrink-0" />
+                        <span>{estadoUbicacion(m)}</span>
+                      </div>
+                    )}
                   </td>
                   <td className="p-6 text-right space-x-2">
                     {m.estado_mision === 'solicitada' && (
