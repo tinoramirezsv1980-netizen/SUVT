@@ -49,3 +49,8 @@ backend/uploads/
 
 # Archivos de respaldo
 package-lock.json.bak
+
+# Aiven (credenciales y dump del espejo)
+.aiven.env
+database/.aiven.env
+database/_aiven*.sql
