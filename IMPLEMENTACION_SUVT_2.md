@@ -956,7 +956,7 @@ https://<suvt2-backend>.onrender.com/health
 
 El campo `db` del health check **se deriva de `DATABASE_URL`** (`index.ts:19-28`), así que sí sirve para confirmar la base: con el espejo debe responder `mysql/rnpn_vehiculos_final`.
 
-**Verificado el 2026-10-15:** `db:"mysql/rnpn_vehiculos_final"` (espejo confirmado). El valor de `env` quedó **pendiente** de corregir a `production` en el dashboard (ver 16.5).
+**Verificado el 2026-10-15:** `ok:true`, `env:"production"` y `db:"mysql/rnpn_vehiculos_final"` (espejo confirmado). También: 404 con `stack:"🥞"` (sin fuga de stack), `/api/areas` y `/api/misiones` responden 401 sin token, y CORS refleja `https://suvt2-frontend.onrender.com`.
 
 ### 16.5 Trampa: `NODE_ENV=production` rompe el build
 
