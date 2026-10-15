@@ -54,3 +54,6 @@ package-lock.json.bak
 .aiven.env
 database/.aiven.env
 database/_aiven*.sql
+
+# Render (variables del entorno paralelo)
+.render.env

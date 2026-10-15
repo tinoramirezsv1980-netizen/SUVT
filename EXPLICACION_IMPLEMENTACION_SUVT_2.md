@@ -139,7 +139,7 @@ copian al `.env` raíz: si no, en contenedor no hay correo ni subida de document
 
 Dos hechos que explican decisiones enteras del plan:
 
-- **Render no usa el Dockerfile.** El Build Command real es `npm install && npm run build`.
+- **Render no usa el Dockerfile.** El Build Command real es `npm install && npm run build`; con `NODE_ENV=production` debe ser `npm install --include=dev && npx prisma generate && npm run build`, porque npm omite las `devDependencies` y el `tsc` del build falla con `TS2591: Cannot find name 'process'`.
   Por eso la variable `NODE_ENV=production` del `Dockerfile` nunca llega a producción y el
   servicio responde `env: development`. Hay que ponerla en el dashboard, no en el Dockerfile.
 - **Render vigila la rama `desarrollo` con Auto-Deploy "On Commit".** Un `git push` a

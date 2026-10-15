@@ -75,7 +75,7 @@ Las letras (A–F) y los números conviven: **la Fase 2 es el desarrollo local y
 | **Único puerto publicado** | Solo el balanceador publica puerto al host: 8080 para `SUVT`, 8081 para `SUVT-2`. |
 | **Rama segura** | `feature/rnpn-vehiculos-final` no dispara el workflow de CI/CD. |
 | **Cloudinary como único resguardo** | Los documentos se suben a Cloudinary; el disco local no participa. |
-| **Build Command** | Render construye con `npm install && npm run build`, **no** con el `Dockerfile` del repo. Ver 3.9.2. |
+| **Build Command** | Render construye con `npm install && npm run build`, **no** con el `Dockerfile` del repo. Con `NODE_ENV=production` debe ser `npm install --include=dev && npx prisma generate && npm run build` (ver 3.9.2 y 16.5). |
 | **Entorno paralelo** | Servicios de Render propios apuntando a una base en Aiven también propia, para validar sin tocar producción. Ver 3.9.1. |
 
 ---
@@ -180,10 +180,16 @@ Implicaciones:
 
 #### 3.9.2 Render no usa el Dockerfile
 
-**Dato verificado:** el Build Command de los servicios de Render es
+**Dato verificado:** el Build Command configurado hoy en los servicios de Render es
 
 ```
 npm install && npm run build
+```
+
+Eso funciona **solo mientras `NODE_ENV` no sea `production`**: npm omite las `devDependencies` cuando `NODE_ENV=production`, y el build necesita `typescript`, `@types/node` y `prisma`. Con `NODE_ENV=production` (lo correcto para runtime) el comando debe ser:
+
+```
+npm install --include=dev && npx prisma generate && npm run build
 ```
 
 El `backend/Dockerfile` **no se ejecuta**. Esa es la causa de varias anomalías aparentemente inconexas:
@@ -192,14 +198,14 @@ El `backend/Dockerfile` **no se ejecuta**. Esa es la causa de varias anomalías 
 |---|---|
 | El servicio vivo responde `env: development` | El `Dockerfile:19` pone `ENV NODE_ENV=production`, pero el Dockerfile nunca corre. La variable la pone el dashboard |
 | `Dockerfile:9` ejecuta `prisma generate` | Irrelevante en la nube: allí lo dispara el postinstall de `@prisma/client` durante `npm install` |
-| `npm ci --omit=dev` del Dockerfile no aplica | Render instala con `npm install`, incluyendo devDependencies. Eso es lo que permite que `tsc` exista en el build |
+| `npm ci --omit=dev` del Dockerfile no aplica | Render instala con `npm install`. Con `NODE_ENV` distinto de `production` incluye devDependencies, que es lo que permite que `tsc` exista en el build. Con `NODE_ENV=production` **npm las omite** y el build falla con `TS2591: Cannot find name 'process'`, salvo que se use `--include=dev` |
 | Versión de Node en disputa | Dockerfile = Node 20, job `build-apk` = Node 22, Render = la que esté en el dashboard |
 
 Consecuencias operativas:
 
 1. **Ajustes de entorno → dashboard de Render, nunca el Dockerfile.**
 2. **Local y remoto no son el mismo artefacto.** Una validación en Docker local no garantiza el comportamiento en producción.
-3. Para el entorno paralelo se usa el **mismo Build Command** que producción: es el camino probado y mantiene el paralelo representativo.
+3. Para el entorno paralelo se usa el **mismo mecanismo** que producción (Build Command, no Dockerfile), pero con `NODE_ENV=production` el comando incluye `--include=dev` y un `npx prisma generate` explícito: `npm install --include=dev && npx prisma generate && npm run build`. Ver 16.5.
 4. El `prisma generate` en la nube es implícito. Si `schema.prisma` cambia en la rama, el siguiente build lo regenera solo.
 
 ---
@@ -914,7 +920,7 @@ Dos Web Services nuevos en Render, independientes de `suvt-backend` y `suvt-fron
 |---|---|
 | Tipo | Web Service (backend), Static Site o Web Service (frontend) |
 | Rama | `feature/rnpn-vehiculos-final` (decisión 21) |
-| Build Command | `npm install && npm run build` (decisión 20) |
+| Build Command | `npm install --include=dev && npx prisma generate && npm run build` (ver 16.5) |
 | Auto-Deploy | **Off**. El despliegue se lanza a mano para no repetir el patrón de `desarrollo` |
 | Puerto | El que asigne Render. No hardcodear 4000 |
 
@@ -948,7 +954,27 @@ https://<suvt2-backend>.onrender.com/health
 # esperado: ok=true, env=production, y la base que responda es el espejo
 ```
 
-El campo `db` del health check es el string fijo de `index.ts:47`, así que **no sirve** para confirmar la base. Confirmarla con un `SELECT DATABASE()` autenticado o con la lista de misiones.
+El campo `db` del health check **se deriva de `DATABASE_URL`** (`index.ts:19-28`), así que sí sirve para confirmar la base: con el espejo debe responder `mysql/rnpn_vehiculos_final`.
+
+**Verificado el 2026-10-15:** `db:"mysql/rnpn_vehiculos_final"` (espejo confirmado). El valor de `env` quedó **pendiente** de corregir a `production` en el dashboard (ver 16.5).
+
+### 16.5 Trampa: `NODE_ENV=production` rompe el build
+
+`NODE_ENV=production` es lo correcto para runtime (oculta el `stack` de los errores, baja el nivel de log, cambia morgan a `combined`; ver 3.9.2), pero **rompe el build** si el Build Command usa `npm install` a secas: npm omite las `devDependencies` cuando `NODE_ENV=production`, y entonces `tsc` falla con:
+
+```
+error TS2591: Cannot find name 'process'. Do you need to install type definitions for node?
+```
+
+(falta `@types/node`; también faltarían `typescript` y `prisma`).
+
+**Solución:** mantener `NODE_ENV=production` en Environment y usar como **Build Command**:
+
+```
+npm install --include=dev && npx prisma generate && npm run build
+```
+
+`--include=dev` fuerza las devDependencies aunque `NODE_ENV=production`. Aplica igual al frontend (Static Site) si algún día se le pone `NODE_ENV`; hoy no lo lleva.
 
 ---
 
@@ -1400,7 +1426,7 @@ cd C:\SUVT-2 ; docker compose up --build -d --scale backend=1 --scale frontend=1
 # pruebas en http://localhost:8081
 
 # Fase 3 — servicios Render paralelos (dashboard)
-# Build Command: npm install && npm run build
+# Build Command: npm install --include=dev && npx prisma generate && npm run build
 # rama feature/rnpn-vehiculos-final, Auto-Deploy Off
 # JWT_SECRET nuevo, CORS_ORIGIN, VITE_API_URL absoluto
 
