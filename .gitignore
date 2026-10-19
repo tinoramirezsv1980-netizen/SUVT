@@ -57,3 +57,7 @@ database/_aiven*.sql
 
 # Render (variables del entorno paralelo)
 .render.env
+
+# Scratch local (scripts de diagnóstico y semillas; varios contienen credenciales
+# codificadas y el build compila src/**/*, así que NUNCA deben viajar al servidor)
+backend/src/scratch/
