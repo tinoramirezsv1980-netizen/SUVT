@@ -14,7 +14,7 @@ class CloudinaryService {
    */
   async uploadFile(
     buffer: Buffer,
-    folder: string = 'SUVT/Misiones'
+    folder: string = 'SUVT2/Misiones'
   ): Promise<UploadResult> {
 
     return new Promise((resolve, reject) => {
