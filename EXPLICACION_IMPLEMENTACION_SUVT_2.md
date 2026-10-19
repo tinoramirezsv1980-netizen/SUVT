@@ -234,10 +234,20 @@ independiente del resto.
 `JWT_SECRET`, su propio `CORS_ORIGIN` y Auto-Deploy apagado. Se crean desde el dashboard,
 porque el repositorio solo define dos servicios.
 
+**Estado: completada el 2026-10-15.** Ambos servicios Live; `/health` responde
+`env:"production"` y `db:"mysql/rnpn_vehiculos_final"`, y el frontend carga con rewrite SPA.
+Detalle y gotchas en el runbook §16 (incluida la trampa de `NODE_ENV=production` con
+`npm install`, §16.5).
+
 ### Fase 4 — Verificación en la nube
 
 Misma prueba manual que en local pero contra la nube: login, alta multi-destino, aprobación,
 recorrido en orden, gate de cierre, PDF y aislamiento de datos.
+
+**Estado: 8 de 9 checks aprobados el 2026-10-16.** Verificados login/CORS, `password_hash`
+ausente, multi-destino con orden, subida a `SUVT2/Misiones`, reemplazo y borrado,
+`/api/areas` → 200, 5xx sin `stack` y 401 anónimo. El 9.º (correo) sigue **diferido** por la
+App Password de Gmail. Resultados en el runbook §17.1.
 
 ### Fase 5 — Cutover
 
@@ -381,8 +391,10 @@ Cloudinary. Detalle completo en `IMPLEMENTACION_SUVT_2.md`, sección 25.
   motorista (llegada/salida), su destino y la hora.
 - **PDF:** "Lugar de Visita" se ajusta con `splitTextToSize` y centrado vertical dentro de su
   caja.
-- **Cloudinary aislado:** `CLOUDINARY_FOLDER` (con default `SUVT/Misiones`) permite que SUVT-2
-  suba a `SUVT2/Misiones` sin afectar producción al mergear.
+- **Cloudinary aislado:** producción sube a `SUVT/Misiones` (carpeta **hardcodeada** en el
+  controlador, sin variable de entorno); SUVT-2 usa `CLOUDINARY_FOLDER=SUVT2/Misiones` en
+  Render, en `docker-compose.yml` y en los `.env` locales, y desde 2026-10-19 el **fallback del
+  propio código** también es `SUVT2/Misiones` (§17.2 del runbook).
 
 Pendiente: los correos reales requieren una *App Password* de Gmail en `SMTP_PASS` (hoy fallan
 con `534-5.7.9`; el flujo igualmente continúa).

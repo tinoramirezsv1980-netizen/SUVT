@@ -934,7 +934,7 @@ Dos Web Services nuevos en Render, independientes de `suvt-backend` y `suvt-fron
 | `JWT_EXPIRES_IN` | Igual que producción |
 | `CORS_ORIGIN` | URL del frontend paralelo |
 | `SMTP_*`, `EMAIL_*` | Copiados de producción. Solo si se quieren probar las notificaciones |
-| `CLOUDINARY_*` | Copiados de producción. El código apunta a `SUVT/Misiones`; para aislar por entorno, extraer la carpeta a `CLOUDINARY_FOLDER=SUVT2/Misiones` |
+| `CLOUDINARY_*` | Copiados de producción. La carpeta se aísla con `CLOUDINARY_FOLDER=SUVT2/Misiones` (en Render y en el `.env` local); desde 2026-10-19 el fallback del código también es `SUVT2/Misiones` (§17.2) |
 | `MAX_UPLOAD_MB` | `5` |
 
 ### 16.3 Variables del frontend paralelo
@@ -998,6 +998,43 @@ Aquí los fixes de documentos se validan de verdad: en la nube no existe `upload
 
 `GET /api/areas` → 404 es el diagnóstico de control: producción corre el código viejo y el paralelo debe responder 200.
 
+### 17.1 Resultado — 2026-10-16
+
+Entorno verificado de punta a punta: `suvt2-backend` (Web Service, `NODE_ENV=production`, Build Command con `--include=dev`) + `suvt2-frontend` (Static Site con rewrite SPA), apuntando al espejo `rnpn_vehiculos_final`.
+
+| # | Verificación | Resultado |
+|---|---|---|
+| 1 | `NODE_ENV=production` | ✅ `env:"production"`, `db:"mysql/rnpn_vehiculos_final"` |
+| 2 | `password_hash` ausente | ✅ `GET /api/misiones` con token → 200 y sin `password_hash` |
+| 3 | Misión multi-destino, orden y cierre | ✅ misión 19 con **4 destinos** (orden 1–4; 1 del catálogo + 3 libres) y `mision.destino` = el primero |
+| 4 | Correo de asignación | ⏸ **Diferido**: SMTP responde `534-5.7.9` (falta App Password de Gmail en `SMTP_PASS`) |
+| 5 | Subida de PDF a Cloudinary | ✅ carpeta `SUVT2/Misiones` |
+| 6 | Reemplazo y borrado del PDF | ✅ R5: el anterior desaparece; R4: columna `NULL` y archivo borrado (verificado por API) |
+| 7 | `GET /api/areas` → 200 | ✅ con token → 200 (7 áreas) |
+| 8 | 5xx sin `stack` | ✅ 404 → `"stack":"🥞"` |
+| 9 | `GET /api/misiones` sin token → 401 | ✅ |
+
+**Pruebas negativas de subida** (R1 en la nube): `.txt` → `400` `Formato de archivo no permitido`; PDF de 6 MB → `413` `El archivo excede el máximo permitido de 5 MB`. Ambas en español y con código correcto.
+
+**Estado del espejo al cerrar la Fase 4:** 3 misiones (18, 19, 20), 7 filas de `destino_mision`, 3 documentos en `SUVT2/Misiones`, 1 emergencia, 0 documentos nulos. **Producción** `rnpn_vehiculos_nueva`: 10 tablas, 21 misiones, intacta.
+
+### 17.2 `CLOUDINARY_FOLDER` y la carpeta de cada aplicación
+
+Regla de aislamiento: **SUVT (producción) sube a `SUVT/Misiones`; SUVT2 (espejo) sube a `SUVT2/Misiones`.**
+
+| App | Cómo decide la carpeta | Valor efectivo |
+|---|---|---|
+| `suvt-backend` (producción) | **Hardcodeado** en `backend/src/controllers/misiones.controller.ts` (`'SUVT/Misiones'`). No depende de ninguna variable | `SUVT/Misiones` |
+| `suvt2-backend` (espejo) | Variable `CLOUDINARY_FOLDER` en Render + **fallback del código `SUVT2/Misiones`** | `SUVT2/Misiones` |
+
+**Gotcha original (2026-10-15):** el fallback del código era `process.env.CLOUDINARY_FOLDER || 'SUVT/Misiones'`, así que si la variable **no estaba** en el servicio de Render, las subidas del espejo caían en **`SUVT/Misiones`, la carpeta de producción**. Verificado en vivo: un PDF de prueba terminó ahí y hubo que borrarlo.
+
+**Corregido el 2026-10-19:** el fallback del controlador y el default del parámetro en `cloudinary.service.ts` pasaron a `'SUVT2/Misiones'`; `docker-compose.yml` quedó en `${CLOUDINARY_FOLDER:-SUVT2/Misiones}`; `C:\SUVT-2\backend\.env` (local) ahora incluye `CLOUDINARY_FOLDER=SUVT2/Misiones`.
+
+**Contrapartida a vigilar en el cutover (§18):** al hacer merge a producción, el código hereda ese fallback `SUVT2/Misiones`, por lo que **`suvt-backend` debe tener `CLOUDINARY_FOLDER=SUVT/Misiones`** definido en Render antes de desplegar la feature.
+
+Control: revisar la variable en el dashboard y confirmar que la URL guardada en `mision.documento_respaldo` contenga `SUVT2/Misiones`.
+
 ---
 
 ## 18. Fase 5 — Cutover
@@ -1009,9 +1046,10 @@ Los pasos mínimos, por orden:
 1. Confirmar que `rnpn_vehiculos_final` de Aiven es la base definitiva.
 2. Migrar los datos reales de `rnpn_vehiculos_nueva` a `final`: **16 misiones** con sus movimientos, controles de acceso, registros de combustible y asignaciones, más cualquier divergencia en maestros.
 3. Aplicar la migración 004 sobre `nueva` si se decide ampliar producción.
-4. Cambiar el `DATABASE_URL` de `suvt-backend` a `rnpn_vehiculos_final`.
-5. Desplegar la feature a `suvt-backend`/`suvt-frontend`.
-6. Verificar con el tráfico real y mantener la posibilidad de volver.
+4. Definir en `suvt-backend` la variable **`CLOUDINARY_FOLDER=SUVT/Misiones`**. Con el merge, el código de SUVT-2 arrastra el fallback `SUVT2/Misiones`: si la variable no está, los PDF de producción empezarían a caer en la carpeta del espejo (§17.2).
+5. Cambiar el `DATABASE_URL` de `suvt-backend` a `rnpn_vehiculos_final`.
+6. Desplegar la feature a `suvt-backend`/`suvt-frontend`.
+7. Verificar con el tráfico real y mantener la posibilidad de volver.
 
 El paso 2 es el trabajo grande y **no existe en ningún documento todavía**. Mientras no se decida, `SUVT-2` es un experimento local y paralelo.
 
@@ -1466,15 +1504,22 @@ Commits locales en `feature/rnpn-vehiculos-final`:
 
 ### 25.2 Aislamiento de Cloudinary
 
-- `backend/src/controllers/misiones.controller.ts` (`uploadDocument`) usa
-  `process.env.CLOUDINARY_FOLDER || 'SUVT/Misiones'`.
-- `docker-compose.yml` define `CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-SUVT/Misiones}`.
-- `.env` raíz de SUVT-2 fija `CLOUDINARY_FOLDER=SUVT2/Misiones` (no versionado).
+- Producción (`SUVT`) tiene la carpeta **hardcodeada**:
+  `backend/src/controllers/misiones.controller.ts` (`uploadDocument`) usa literalmente
+  `'SUVT/Misiones'`, así que no depende de ninguna variable de entorno.
+- SUVT-2 toma la carpeta de `process.env.CLOUDINARY_FOLDER`, con **fallback `SUVT2/Misiones`**
+  en `misiones.controller.ts` y como valor por defecto del parámetro en `cloudinary.service.ts`.
+- `docker-compose.yml` define `CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-SUVT2/Misiones}`;
+  `.env` raíz de SUVT-2 y `backend/.env` lo fijan a `SUVT2/Misiones` (no versionados).
 
-El default sigue siendo `SUVT/Misiones` para no alterar producción al mergear desde
-`desarrollo`. Verificado en el E2E: el PDF de prueba quedó en
-`https://res.cloudinary.com/dyn6stlcn/image/upload/SUVT2/Misiones/<id>.pdf`, mientras los de
-pruebas previas permanecen en `SUVT/Misiones`.
+El 2026-10-19 el fallback se cambió de `SUVT/Misiones` a `SUVT2/Misiones`. El planteamiento
+original lo dejaba en `SUVT/Misiones` para no alterar producción al mergear desde `desarrollo`;
+ese cuidado ahora se invierte y hay que cubrirlo en el cutover: **antes de desplegar la feature
+a `suvt-backend`, definir `CLOUDINARY_FOLDER=SUVT/Misiones` en Render** (§18, paso 4).
+
+Verificado en el E2E (Fase 4) y de nuevo por API el 2026-10-19: `SUVT2/Misiones` contiene
+exactamente los 3 PDF del espejo (misiones 18, 19 y 20, todos `200` al hacer HEAD) y
+`SUVT/Misiones` conserva los 6 de producción intactos, el más reciente del 2026-09-04.
 
 ### 25.3 Verificación y limpieza
 
